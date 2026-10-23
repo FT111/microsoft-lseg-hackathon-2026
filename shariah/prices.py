@@ -42,3 +42,13 @@ def history(ticker: str, start: str = "2007-01-01") -> pd.Series:
 
 def last_price(ticker: str) -> float:
     return float(history(ticker).iloc[-1])
+
+
+def average_price(ticker: str, days: int = 365) -> dict:
+    """Average daily close over the last `days`, with the window used. Adjusted closes are
+    slightly below the prices actually traded (dividends are taken out), which makes the
+    market value a little lower and the AAOIFI ratios a little higher - the cautious side."""
+    s = history(ticker)
+    s = s[s.index >= s.index[-1] - pd.Timedelta(days=days)]
+    return {"value": float(s.mean()), "start": s.index[0].strftime("%Y-%m-%d"), "end": s.index[-1].strftime("%Y-%m-%d"),
+            "observations": int(len(s))}

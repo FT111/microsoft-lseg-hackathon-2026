@@ -43,30 +43,27 @@ def price_metrics(ticker: str) -> dict:
     }
 
 
-def headroom(verdict: dict, standard_rules: dict) -> float:
-    """Smallest distance (as a share of the limit) between a ratio and its limit. 1 = far, 0 = at the limit."""
-    base = verdict["ratios"].get(standard_rules["denominator"]) or {}
-    gaps = []
-    for key in ("debt", "cash", "receivables", "receivables_plus_cash"):
-        lim = standard_rules.get(key)
-        if lim and key in base:
-            gaps.append(max(0.0, 1 - base[key] / lim))
-    nc = verdict.get("noncompliant_income_pct")
-    if nc is not None:
-        gaps.append(max(0.0, 1 - nc / standard_rules["noncompliant_revenue"]))
+def headroom(verdict: dict) -> float:
+    """Smallest distance (as a share of the limit) between a screened value and its limit,
+    across every screen of the chosen standard. 1 = far below, 0 = at the limit."""
+    gaps = [max(0.0, 1 - s["value"] / s["limit"]) for s in verdict.get("screens", [])
+            if s.get("value") is not None and s.get("limit")]
     return min(gaps) if gaps else np.nan
 
 
-def rank(passing: dict, standard_rules: dict, weights: dict = WEIGHTS) -> pd.DataFrame:
-    """passing: {ticker: screen_result}. Returns one row per stock, best first."""
+def rank(passing: dict, weights: dict = WEIGHTS) -> pd.DataFrame:
+    """passing: {ticker: screen_result}. Only stocks whose overall status is PASS are ranked.
+    Returns one row per stock, best first."""
     rows = []
     for t, res in passing.items():
+        if res["verdict"]["status"] != "PASS":
+            continue
         try:
             m = price_metrics(t)
         except Exception:
             continue
         m.update({"ticker": t, "company": res["fin"]["name"],
-                  "headroom": headroom(res["verdict"], standard_rules)})
+                  "headroom": headroom(res["verdict"])})
         rows.append(m)
     df = pd.DataFrame(rows)
     if df.empty:

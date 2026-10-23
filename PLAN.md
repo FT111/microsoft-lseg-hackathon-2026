@@ -23,7 +23,7 @@ speculation, and short selling / margin are not permitted.
 
 ```
  SEC EDGAR financials ──► ratio screen (Python) ──┐
-                                                  ├─► PASS / FAIL / REVIEW ──► rank (Python) ──► allocate ──► stress test
+                                                  ├─► PASS / FAIL / NEEDS REVIEW ──► rank (Python) ──► allocate ──► stress test
  SEC 10-K "Item 1" text ──► business screen (AI) ─┘     + evidence quote       momentum, risk,     top N      2008/2020/2022
                                                                                drawdown, headroom            + purification
                        AI analyst note per stock · AI answers questions ONLY from these results
@@ -36,13 +36,13 @@ speculation, and short selling / margin are not permitted.
   assets) and AAOIFI (ratios vs market cap).
 - **Compliance headroom:** how far a stock sits below the nearest Shariah limit.
   Near a limit = risk of having to sell. Ordinary screeners ignore this.
-- **REVIEW, not guess:** missing data or a borderline AI estimate goes to a person.
+- **NEEDS REVIEW, not guess:** missing data or a borderline AI estimate goes to a person.
 
 ## Screens
 
 | Tab | Shows |
 |---|---|
-| 1 Screening | PASS / FAIL / REVIEW for 32 US stocks, ratios, reasons, 10-K quote |
+| 1 Screening | PASS / FAIL / NEEDS REVIEW for 32 US stocks, ratios, reasons, 10-K quote |
 | 2 Stock picks | 0-100 score, signal, bar chart; AI analyst note for any stock |
 | 3 Allocation | The $ split across the top picks (max 10% each), sukuk optional |
 | 4 Stress test & purification | 2008 / 2020 / 2022 in dollars; dividends to donate |
@@ -81,7 +81,7 @@ app runs offline.
 
 1. **(1 min)** Aisha: $100k, wants halal growth, no time to read annual reports.
 2. **(2 min)** Screening: a bank and a defence company fail with quotes; Apple goes
-   to REVIEW (AI unsure, near the 5% limit) - "we flag rather than guess".
+   to NEEDS REVIEW (AI unsure, near the 5% limit) - "we flag rather than guess".
    Toggle FTSE -> AAOIFI.
 3. **(2 min)** Stock picks: switch Cautious -> Adventurous, the ranking changes.
    Open one analyst note. Point at a stock flagged "near a Shariah limit".
