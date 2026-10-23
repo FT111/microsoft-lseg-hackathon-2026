@@ -232,3 +232,27 @@ class AiFoundFigures(unittest.TestCase):
         self.assertNotIn("total_debt", out["missing"])
         self.assertTrue(any("found by the AI" in n for n in out["notes"]))
         self.assertIsNone(f["total_debt"])                           # original untouched
+
+
+class IncomeIsOneShare(unittest.TestCase):
+    """Interest + non-permitted income is one share of revenue, never over 100% (FICTIONAL)."""
+
+    def test_bank_interest_is_not_added_on_top_of_banking_revenue(self):
+        # a fictional bank: 55% interest income, main business conventional finance
+        v = verdict(fin(interest_income=550.0), business(activity("conventional_finance", 100.0, primary=True)), FTSE)
+        s = screen_of(v, "noncompliant_income")
+        self.assertEqual(s["status"], FAIL)
+        self.assertEqual(s["value"], 1.0)
+        self.assertIn("counted once", s["note"])
+
+    def test_non_finance_activities_do_add_to_interest(self):
+        v = verdict(fin(interest_income=30.0), business(activity("alcohol", 4.0)), FTSE)
+        self.assertAlmostEqual(screen_of(v, "noncompliant_income")["value"], 0.07)
+
+    def test_never_above_100_percent(self):
+        v = verdict(fin(interest_income=800.0), business(activity("alcohol", 60.0)), FTSE)
+        self.assertEqual(screen_of(v, "noncompliant_income")["value"], 1.0)
+
+    def test_activity_share_capped_at_100(self):
+        v = verdict(fin(), business(activity("tobacco", 100.0, primary=True), activity("alcohol", 30.0)), FTSE)
+        self.assertEqual(screen_of(v, "activity")["value"], 1.0)

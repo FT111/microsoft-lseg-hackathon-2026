@@ -44,7 +44,7 @@ def company_facts(ticker: str) -> dict:
                 if name in CONCEPTS_USED:
                     keep[name] = body.get("units", {})
         return {"cik": cik, "name": facts.get("entityName"), "facts": keep}
-    return cached(f"edgar_facts_v3_{ticker}", produce)
+    return cached(f"edgar_facts_v4_{ticker}", produce)  # v4: more dividend tags
 
 
 def submissions(ticker: str) -> dict:
@@ -149,6 +149,10 @@ REVENUE = ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "S
            "RevenueFromContractWithCustomerIncludingAssessedTax"]
 # Interest income, best concept first. Broader concepts (that also include dividends or
 # other income) overstate interest - the conservative direction - and the note says so.
+# Banks report revenue NET of interest expense (net interest income + non-interest income), so the
+# like-for-like interest figure is NET interest income. Used only when NoninterestIncome is tagged too.
+BANK_NET_INTEREST = ["InterestIncomeExpenseNet"]
+BANK_MARKER = ["NoninterestIncome"]
 INTEREST_INCOME = [
     ("InvestmentIncomeInterest", ""),
     ("InterestIncomeOther", ""),
@@ -158,13 +162,16 @@ INTEREST_INCOME = [
     ("InterestAndOtherIncome", "includes other income - overstates interest (conservative)"),
     ("InvestmentIncomeNet", "net investment income used as a proxy - overstates interest (conservative)"),
 ]
-DIVIDENDS = ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"]
+# Companies tag cash dividends differently (e.g. Johnson & Johnson uses PaymentsOfOrdinaryDividends).
+DIVIDENDS = ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends", "PaymentsOfOrdinaryDividends",
+             "DividendsCommonStockCash"]
 SHARES = ["CommonStockSharesOutstanding", "WeightedAverageNumberOfSharesOutstandingBasic"]
 
 CONCEPTS_USED = set(ASSETS + DEBT_COMBINED + DEBT_LT_INCL_CURRENT + DEBT_LT_NONCURRENT + DEBT_LT_CURRENT
                     + DEBT_ALL_CURRENT + DEBT_SHORT + CASH + SHORT_TERM_INTEREST_BEARING + INTEREST_BEARING_DEPOSITS
                     + LONG_TERM_INTEREST_BEARING + DEBT_SECURITIES_TOTAL + RECEIVABLES + REVENUE
-                    + [c for c, _ in INTEREST_INCOME] + DIVIDENDS + SHARES + ["EntityCommonStockSharesOutstanding"])
+                    + [c for c, _ in INTEREST_INCOME] + BANK_NET_INTEREST + BANK_MARKER + DIVIDENDS + SHARES
+                    + ["EntityCommonStockSharesOutstanding"])
 FORMS = ("10-K", "10-K/A", "10-Q", "10-Q/A")
 STALE_AFTER_DAYS = 480   # ~15 months: older balance sheets are flagged as outdated
 
@@ -322,7 +329,15 @@ def financials(ticker: str, today: str | None = None) -> dict:
     items["revenue"] = rev
     items["interest_income"] = None
     if rev:
+        bank = _annual(f, BANK_MARKER[0], rev["period_end"])
+        net = _annual(f, BANK_NET_INTEREST[0], rev["period_end"]) if bank else None
+        if net and net["value"] >= 0:
+            items["interest_income"] = net
+            out["notes"].append("interest income: net interest income (the company reports revenue net of interest "
+                                "expense, so this is the like-for-like share)")
         for c, note in INTEREST_INCOME:
+            if items["interest_income"]:
+                break
             v = _annual(f, c, rev["period_end"])
             if v and v["value"] >= 0:
                 items["interest_income"] = v

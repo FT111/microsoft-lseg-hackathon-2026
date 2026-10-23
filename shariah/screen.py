@@ -139,8 +139,14 @@ def _screen(key, label, clause, text, status, value=None, limit=None, op=None, n
             "limit": limit, "op": op, "note": note, "inputs": inputs or {}}
 
 
+FINANCE_CATEGORIES = {"conventional_finance", "conventional_insurance"}
+
+
 def _activity_screen(business: dict, standard: str) -> tuple[dict, float | None, float]:
-    """Returns (screen, best-estimate share or None if unknown, firmly evidenced share)."""
+    """Returns (screen, best-estimate share or None if unknown, firmly evidenced share).
+    The screen carries 'finance_primary': True when the main business is conventional finance /
+    insurance, whose revenue already includes the interest income - so the income screen must not
+    add the two together."""
     m = METHODOLOGIES[standard]["activity"]
     counted = counted_categories(standard)
     acts = business.get("activities") or []
@@ -196,9 +202,11 @@ def _activity_screen(business: dict, standard: str) -> tuple[dict, float | None,
     primary = [a for a in relevant if a.get("primary_business") and a.get("quote_verified")]
     if primary:
         names = ", ".join(a["category"].replace("_", " ") for a in primary)
-        return _screen(**base, status=FAIL, value=estimate_or_none,
-                       note=f"main business is a non-permitted activity ({names}), shown by a verified 10-K quote"
-                       + (f"; {found}" if found else "")), estimate_or_none, firm
+        sc = _screen(**base, status=FAIL, value=min(1.0, estimate) if estimate_or_none is not None else None,
+                     note=f"main business is a non-permitted activity ({names}), shown by a verified 10-K quote"
+                     + (f"; {found}" if found else ""))
+        sc["finance_primary"] = any(a["category"] in FINANCE_CATEGORIES for a in primary)
+        return sc, estimate_or_none, min(1.0, firm)
     if firm > 0 and breaches(firm, m["limit"], m["op"]):
         return _screen(**base, status=FAIL, value=firm, note=found), estimate_or_none, firm
     if estimate > 0 and breaches(estimate, m["limit"], m["op"]) and estimate >= LOW_CONFIDENCE_FAIL_FLOOR \
@@ -257,7 +265,16 @@ def _ratio_screen(rule: dict, fin: dict, market_cap: dict | None, standard: str)
     return _screen(**base, status=status, value=value, note="; ".join(notes))
 
 
-def _income_screen(fin: dict, standard: str, activity_estimate, activity_firm, activity_status) -> dict:
+def _combine(interest_share, activity_share, finance_primary: bool) -> float:
+    """Interest + non-permitted income as ONE share of revenue, never above 100%. When the main
+    business is conventional finance the interest is part of that business's revenue, so the
+    larger of the two is used rather than their sum."""
+    i, a = interest_share or 0.0, activity_share or 0.0
+    return min(1.0, max(i, a) if finance_primary else i + a)
+
+
+def _income_screen(fin: dict, standard: str, activity_estimate, activity_firm, activity_status,
+                   finance_primary: bool = False) -> dict:
     m = METHODOLOGIES[standard]["income"]
     base = dict(key="noncompliant_income", label="Interest + non-compliant income / total revenue",
                 clause=m["clause"], text=m["text"], limit=m["limit"], op=m["op"],
@@ -266,18 +283,20 @@ def _income_screen(fin: dict, standard: str, activity_estimate, activity_firm, a
     if not rev:
         return _screen(**base, status=NEEDS_REVIEW, note="total revenue not reported in XBRL - cannot calculate")
     ii_share = ii / rev if ii is not None else None
-    firm_total = (ii_share or 0) + activity_firm
+    firm_total = _combine(ii_share, activity_firm, finance_primary)
+    how = ("the main business is conventional finance, so its revenue already includes the interest - counted once"
+           if finance_primary else "interest income plus revenue from non-permitted activities")
     if breaches(firm_total, m["limit"], m["op"]):
         return _screen(**base, status=FAIL, value=firm_total,
-                       note=f"interest {ii_share or 0:.1%} + non-permitted activities {activity_firm:.1%}")
+                       note=f"interest income {ii_share or 0:.1%} of revenue; non-permitted activities {activity_firm:.1%}; {how}")
     problems = []
     if ii_share is None:
         problems.append("interest income not tagged in XBRL - check the income-statement notes")
     if activity_estimate is None or activity_status == NEEDS_REVIEW:
         problems.append("non-permitted activity share is uncertain")
-    total = (ii_share or 0) + (activity_estimate or 0)
-    detail = f"interest {ii_share:.1%}" if ii_share is not None else "interest unknown"
-    detail += f" + activities {activity_estimate:.1%}" if activity_estimate is not None else " + activities unknown"
+    total = _combine(ii_share, activity_estimate, finance_primary)
+    detail = f"interest income {ii_share:.1%} of revenue" if ii_share is not None else "interest income unknown"
+    detail += f"; non-permitted activities {activity_estimate:.1%}" if activity_estimate is not None else "; non-permitted activities unknown"
     if problems:
         return _screen(**base, status=NEEDS_REVIEW, value=None if ii_share is None or activity_estimate is None
                        else total, note="; ".join(problems) + f" ({detail})")
@@ -300,7 +319,7 @@ def verdict(fin: dict, business: dict, standard: str, market_cap: dict | None = 
     screens.append(act)
     for rule in meth["ratios"]:
         screens.append(_ratio_screen(rule, fin, market_cap, standard))
-    screens.append(_income_screen(fin, standard, act_estimate, act_firm, act["status"]))
+    screens.append(_income_screen(fin, standard, act_estimate, act_firm, act["status"], bool(act.get("finance_primary"))))
     if fin.get("stale"):
         screens.append(_screen("freshness", "Data freshness", "-", "Screens use the latest reported figures",
                                NEEDS_REVIEW, note=f"balance sheet dated {fin.get('period_end')} is over 15 months old"))
