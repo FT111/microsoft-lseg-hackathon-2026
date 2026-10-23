@@ -15,6 +15,16 @@ UNIVERSE = [
     "JPM", "BAC", "MO", "LMT", "DIS", "MAR", "STZ",
 ]
 
+# London-listed (FTSE 100) - the UK market Amanat targets. Same idea: likely passes,
+# likely business-activity fails (banks, insurers, tobacco, alcohol, gambling, hotels, defence).
+UK_UNIVERSE = [
+    "AZN.L", "GSK.L", "HIK.L", "ULVR.L", "RKT.L", "TSCO.L", "SBRY.L", "NXT.L", "JD.L", "ABF.L",
+    "SHEL.L", "BP.L", "RIO.L", "AAL.L", "GLEN.L", "REL.L", "EXPN.L", "AUTO.L", "RMV.L", "HLMA.L",
+    "SGE.L", "CRDA.L", "ITRK.L", "VOD.L", "NG.L", "SSE.L",
+    # expected business-activity fails
+    "HSBA.L", "BARC.L", "LLOY.L", "LGEN.L", "BATS.L", "IMB.L", "DGE.L", "ENT.L", "IHG.L", "BA.L",
+]
+
 # Sukuk (Islamic bond) ETF used for the fixed-income sleeve.
 SUKUK_ETF = "SPSK"
 

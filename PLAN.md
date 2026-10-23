@@ -55,7 +55,7 @@ Adventurous - changes ranking weights), number of stocks.
 
 ```
 copy .env.example .env      # then put the team key in OPENAI_API_KEY
-pip install openai python-dotenv streamlit pandas plotly requests
+pip install openai python-dotenv streamlit pandas plotly requests yfinance
 python warm_cache.py        # first time only: downloads + AI screens everything (~3 min)
 streamlit run app.py
 ```
