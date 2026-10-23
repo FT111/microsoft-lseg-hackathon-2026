@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from shariah import edgar, llm, portfolio, prices, screen
+from shariah import edgar, llm, portfolio, prices, screen, signals
 from shariah.universe import SUKUK_ETF, UNIVERSE
 
 st.set_page_config(page_title="Waqf Analyst", layout="wide")
@@ -26,8 +26,9 @@ with st.sidebar:
     standard = st.radio("Screening standard", list(screen.STANDARDS))
     payout = st.slider("Annual payout to scholarships", 0.02, 0.06, 0.04, 0.005, format="%.3f")
     cost = st.number_input("Cost of one scholarship ($)", 100, 10_000, 500, step=100)
-    eq = st.slider("Shariah equities", 0.0, 1.0, 0.60, 0.05)
-    sk = st.slider("Sukuk", 0.0, 1.0 - eq, min(0.30, 1.0 - eq), 0.05)
+    top_n = st.slider("Stocks to hold", 3, 20, 10)
+    eq = st.slider("Share in Shariah stocks", 0.5, 1.0, 1.0, 0.05)
+    sk = st.slider("Sukuk (optional)", 0.0, 1.0 - eq, 0.0, 0.05) if eq < 1.0 else 0.0
     use_llm = st.toggle("Use AI to read 10-Ks", value=llm.available(), disabled=not llm.available(),
                         help="Needs OPENAI_API_KEY in .env. Without it, a rule on the SEC industry code is used.")
     tickers = st.multiselect("Universe", UNIVERSE, default=UNIVERSE)
@@ -53,7 +54,7 @@ def screen_one(t: str, std: str, use_ai: bool):
     return {"fin": fin, "sic": sub["sicDescription"], "mcap": mcap, "business": business, "verdict": v}
 
 
-tab_screen, tab_alloc, tab_stress, tab_ask = st.tabs(["1 · Screening", "2 · Allocation", "3 · Stress test & purification", "4 · Ask"])
+tab_screen, tab_picks, tab_alloc, tab_stress, tab_ask = st.tabs(["1 · Screening", "2 · Stock picks", "3 · Allocation", "4 · Stress test & purification", "5 · Ask"])
 
 results, errors = {}, []
 with st.spinner("Screening..."):
@@ -88,12 +89,56 @@ with tab_screen:
             st.write(errors)
 
 passing = [t for t, r in results.items() if r["verdict"]["status"] == "PASS"]
+ranking = signals.rank({t: results[t] for t in passing}, screen.STANDARDS[standard]) if passing else pd.DataFrame()
+picks = [] if ranking.empty else ranking[~ranking["signal"].str.startswith("Watch - near")]["ticker"].head(top_n).tolist()
+
+with tab_picks:
+    if ranking.empty:
+        st.info("No compliant stocks to rank yet.")
+    else:
+        a, b, c = st.columns(3)
+        a.metric("Compliant stocks", len(ranking))
+        b.metric("Strong candidates", int((ranking["signal"] == "Strong candidate").sum()))
+        c.metric("Near a Shariah limit", int(ranking["signal"].str.startswith("Watch - near").sum()))
+        st.plotly_chart(px.bar(ranking, x="ticker", y="score", color="signal", template="plotly_dark",
+                               color_discrete_map={"Strong candidate": "#3FB68B", "Watch": "#D4A72C",
+                                                   "Lower priority": "#6B7785", "Watch - near Shariah limit": "#E5534B"}),
+                        use_container_width=True)
+        show = ranking[["ticker", "company", "signal", "score", "price", "return_1y", "momentum_12_1",
+                        "volatility", "max_drawdown_1y", "headroom"]]
+        st.dataframe(show, use_container_width=True, hide_index=True, column_config={
+            "score": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f"),
+            "price": st.column_config.NumberColumn(format="dollar"),
+            **{k: st.column_config.NumberColumn(format="percent") for k in
+               ("return_1y", "momentum_12_1", "volatility", "max_drawdown_1y", "headroom")}})
+        st.caption("Score = 35% momentum (12-1 month) + 25% low volatility + 15% smaller drawdown + 25% compliance "
+                   "headroom. Headroom = distance below the nearest Shariah limit: a stock close to a limit may have "
+                   "to be sold if it breaches it. This ranks candidates; it does not predict prices.")
+
+        st.subheader("Analyst view")
+        pick = st.selectbox("Stock", ranking["ticker"].tolist())
+        row = ranking.set_index("ticker").loc[pick]
+        r = results[pick]
+        st.write(f"**{row['signal']}** · {signals.reasons(row)}")
+        st.write("Shariah screen: " + ("; ".join(r["verdict"]["reasons"] + r["verdict"]["review"]) or "meets all screens")
+                 + (f" · evidence: “{r['business'].get('evidence')}”" if r["business"].get("evidence") else ""))
+        if llm.available() and st.button(f"Write the AI analyst note for {pick}"):
+            facts = {"ticker": pick, "company": row["company"], "signal": row["signal"], "score": round(row["score"]),
+                     "metrics": {k: round(float(row[k]), 4) for k in ("return_1y", "momentum_12_1", "volatility",
+                                                                       "max_drawdown_1y", "headroom")},
+                     "shariah": {"standard": standard, "status": r["verdict"]["status"],
+                                 "evidence": r["business"].get("evidence")}}
+            st.markdown(llm.ask(
+                "You are an equity analyst writing for a Shariah-conscious investor. Using ONLY the JSON facts, write: "
+                "1) a two-sentence view, 2) three bullet reasons for, 3) two bullet risks (include Shariah-compliance "
+                "risk if headroom is low), 4) what would change the view. No price targets. No invented numbers. "
+                "End with: Educational project, not financial advice.", json.dumps(facts, default=str)))
 
 with tab_alloc:
-    if not passing:
+    if not (picks or passing):
         st.info("No stocks pass yet.")
     else:
-        alloc = portfolio.build(passing, amount, eq, sk, SUKUK_ETF)
+        alloc = portfolio.build(picks or passing, amount, eq, sk, SUKUK_ETF)
         st.session_state["alloc"] = alloc
         a, b, c = st.columns(3)
         a.metric("Holdings", len(alloc))
@@ -131,12 +176,13 @@ with tab_ask:
                    "screen": {t: {"status": r["verdict"]["status"], "reasons": r["verdict"]["reasons"],
                                   "review": r["verdict"]["review"], "evidence": r["business"].get("evidence")}
                               for t, r in results.items()},
+                   "stock_ranking": ranking.drop(columns=[c for c in ranking.columns if c.startswith("s_")]).to_dict("records") if not ranking.empty else [],
                    "allocation": st.session_state["alloc"].to_dict("records")
                    if st.session_state.get("alloc") is not None else []}
         system = ("You explain an investment recommendation to the trustees of a mosque endowment. Answer ONLY from "
                   "the JSON context. If the answer is not in it, say so. Plain English, short. Not financial advice.\n"
                   + json.dumps(context, default=str))
-        presets = ["Why was this split chosen?", "Which companies failed and why?",
+        presets = ["Which stocks look strongest and why?", "Why was this split chosen?", "Which companies failed and why?",
                    "What happens to scholarships in a bad year?", "What would make you change this?"]
         cols = st.columns(len(presets))
         q = None

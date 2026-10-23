@@ -39,9 +39,12 @@ BUSINESS_SYSTEM = """You screen companies for Shariah compliance (business-activ
 Non-compliant activities: conventional (interest-based) banking, finance and insurance; alcohol;
 pork and non-halal food processing; gambling, casinos, cinema, music, adult entertainment, hotels;
 tobacco; weapons and defence.
-Read the 10-K business section you are given. Estimate the share of total revenue from
-non-compliant activities. Only use the text given; if it does not say, give your best estimate and
-set confidence to "low".
+Read the 10-K business section you are given. Estimate the share of total revenue that comes
+DIRECTLY from non-compliant activities as a main line of business. Ancillary features, optional
+add-ons, and products that merely carry third-party content do not count unless the text shows
+they are a material revenue line. Do NOT include interest income (it is measured separately).
+Only use the text given; if it does not quantify the revenue, give your best estimate and set
+confidence to "low".
 Reply with JSON only:
 {"noncompliant_pct": number 0-100, "categories": [strings], "evidence": "one short verbatim quote from the text",
  "confidence": "high"|"medium"|"low", "reasoning": "one sentence"}"""

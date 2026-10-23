@@ -86,9 +86,14 @@ def verdict(fin: dict, market_cap: float | None, business: dict, standard: str) 
 
     nc = business.get("noncompliant_pct")
     ii = r.get("interest_income_pct") or 0
+    borderline = (business.get("method") == "LLM" and business.get("confidence") == "low"
+                  and nc is not None and 2 <= nc <= 15)
     if nc is None:
         review.append("business activity unclear: " + "; ".join(business.get("categories", [])))
-    else:
+    elif borderline:
+        review.append(f"AI estimate of non-compliant revenue ~{nc:.0f}% is low-confidence and near the "
+                      f"5% limit ({', '.join(business.get('categories') or [])}) - a person should check")
+    if nc is not None and not borderline:
         total_nc = min(1.0, nc / 100 + ii)
         if total_nc > rules["noncompliant_revenue"]:
             cats = ", ".join(business.get("categories") or []) or "interest income"
