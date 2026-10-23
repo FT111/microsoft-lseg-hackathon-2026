@@ -5,7 +5,7 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Amanat | Impact portfolio",
-    page_icon="✦",
+    page_icon="☾",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -178,15 +178,36 @@ st.markdown(
     }
 
     .brand-mark {
-        display: inline-grid;
+        position: relative;
+        display: inline-block;
         width: 27px;
         height: 27px;
         margin-right: .45rem;
-        place-items: center;
-        border-radius: 9px;
+        vertical-align: middle;
         background: var(--baltic-blue);
-        color: var(--alice-blue);
-        font-size: .9rem;
+        clip-path: polygon(50% 0, 91% 14%, 86% 66%, 71% 86%, 50% 100%, 29% 86%, 14% 66%, 9% 14%);
+    }
+
+    .brand-mark::before {
+        content: "";
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--alice-blue);
+    }
+
+    .brand-mark::after {
+        content: "";
+        position: absolute;
+        top: 4px;
+        left: 11px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--baltic-blue);
     }
 
     .topbar-note {
@@ -361,7 +382,7 @@ if not st.session_state.authenticated:
         st.markdown(
             """
             <div class="brand" style="display:block; margin-bottom:2.8rem; text-align:center">
-                <span class="brand-mark">✦</span>Amanat
+                <span class="brand-mark" aria-hidden="true"></span>Amanat
             </div>
             <h1 style="margin:0; color:#000000; font-family:'Space Grotesk',sans-serif; font-size:2.25rem; letter-spacing:-.06em; line-height:1; text-align:center">
                 Welcome back
@@ -389,7 +410,7 @@ st.markdown(
     """
     <div class="dashboard-shell">
         <div class="topbar">
-            <div class="brand"><span class="brand-mark">✦</span>Amanat</div>
+            <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Amanat</div>
             <div class="topbar-note">Emerging markets · impact-led research</div>
         </div>
         <div class="hero">
