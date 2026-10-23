@@ -304,9 +304,145 @@ links to its source" - plus one stress-test number in the client's terms.
 Sources: [Benzinga - Redditor's ChatGPT experiment](https://www.benzinga.com/markets/equities/25/08/46783783/redditors-100-chatgpt-day-trading-experiment-trounces-two-benchmark-indexes-with-24-returns-here)
 - [LLM news sentiment and stock prediction (arXiv 2026)](https://arxiv.org/html/2602.00086v2)
 - [LSEG Developers - stock insights from news with LLMs](https://developers.lseg.com/en/article-catalog/article/ai-driven-stock-insights--analyzing-financial-news-with-llms)
-- [Why yfinance broke](https://deepcharts.substack.com/p/why-did-the-yfinance-python-library)
 - [Four free stock APIs tested](https://orthogonal.info/i-tested-4-free-stock-market-apis-heres-which-one-actually-works-for-side-projects/)
 
 > **Still open**
 > The team hasn't picked a client or route yet. When it does, replace the
 > "Suggested idea" callout above with the decision.
+Sources
+1. LLM news sentiment and stock prediction (arXiv 2026)
+
+Link: LLM news sentiment and stock prediction (arXiv 2026)
+
+✅ Why this is good
+
+Compares FinBERT, RoBERTa and DeBERTa on financial news sentiment.
+Shows how sentiment can improve stock prediction models.
+Demonstrates ensemble models can outperform individual sentiment models.
+Provides research-backed evidence for using financial sentiment analysis.
+
+❌ Limitations
+
+Focuses mainly on stock price prediction.
+Not designed for Shariah screening.
+Improvements in prediction are often modest rather than transformative.
+Ideas we can use for Sharish
+News sentiment scoring (positive/neutral/negative).
+Daily company sentiment indicator.
+Portfolio sentiment dashboard.
+AI alerts when sentiment suddenly deteriorates.
+News aggregation and ranking.
+2. LSEG Developers - stock insights from news with LLMs
+
+Link: LSEG Developers - stock insights from news with LLMs
+
+✅ Why this is good
+
+Provides a practical implementation pipeline.
+Shows how to collect news, analyse sentiment and generate summaries.
+Uses financial-specific NLP models.
+Demonstrates how financial institutions use news intelligence.
+
+❌ Limitations
+
+Requires access to LSEG/Refinitiv data.
+Focuses on general investing rather than Islamic finance.
+Sentiment alone cannot determine Shariah compliance.
+Ideas we can use for Sharish
+News summarisation for investors.
+"What happened this week?" company summaries.
+Compliance risk alerts from news.
+AI-generated weekly reports for mosque endowments.
+Monitoring significant company events.
+3. Why yfinance broke
+
+Link: Why yfinance broke
+
+✅ Why this is good
+
+Highlights risks of depending on a single free data source.
+Introduces Stooq as an alternative.
+Useful for rapid prototyping and side projects.
+Simple setup for historical price data.
+
+❌ Why this is not very useful for Sharish
+
+Only solves the price-data problem.
+No compliance data.
+No fundamentals.
+No Shariah analysis.
+Easily replaceable by other providers.
+Ideas we can use for Sharish
+Backup data provider.
+Historical charts.
+Basic performance visualisations.
+
+Priority: Low
+
+4. Four free stock APIs tested
+
+Link: Four free stock APIs tested
+
+✅ Why this is good
+
+Practical comparison of:
+Finnhub
+Polygon
+Alpha Vantage
+yFinance
+Helps choose data providers.
+Discusses rate limits and reliability.
+Useful for building a production data pipeline.
+
+❌ Limitations
+
+Focused on infrastructure rather than investment analysis.
+Does not discuss Shariah compliance.
+Ideas we can use for Sharish
+Market price feeds.
+Historical stock data.
+Watchlists and portfolio performance.
+Real-time monitoring.
+News API integration (Finnhub).
+Which source is MOST useful for Sharish?
+🥇 #1 LSEG Developers - stock insights from news with LLMs
+
+Reason: Closest to a real Sharish feature set:
+
+News collection
+Summarisation
+Sentiment analysis
+Investor dashboard
+🥈 #2 Four free stock APIs tested
+
+Reason: Helps build the technical infrastructure and data pipeline for the application.
+
+🥉 #3 LLM news sentiment and stock prediction (arXiv 2026)
+
+Reason: Good research support for using sentiment analysis but less practical.
+
+#4 Why yfinance broke
+
+Reason: Useful only as an engineering backup reference.
+
+Most valuable features for our app (Sharish)
+High Priority
+
+✅ Shariah screening (AAOIFI / FTSE methodologies)
+
+✅ Revenue source analysis
+
+✅ Interest income detection
+
+✅ Debt ratio calculation
+
+✅ Compliance status (Pass / Fail)
+
+✅ Purification calculations
+
+Medium Priority
+
+✅ News summarisation
+
+✅ AI-generated company summaries
+
