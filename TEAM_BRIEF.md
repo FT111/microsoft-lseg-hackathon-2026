@@ -198,6 +198,69 @@ One-sentence pitch from that:
 > splits $100k across ASEAN markets, explains the split with real economic
 > data, and keeps reading the news to warn you when an event hits your money."
 
+## How we build it - Streamlit build guide
+
+Our own versions of four patterns that make a finance app feel finished. Times
+are rough.
+
+### 1. A polished look (~20 min)
+
+Own palette, not a copy of anyone's. `.streamlit/config.toml`:
+
+```toml
+[theme]
+base = "dark"
+primaryColor = "#3FB68B"
+backgroundColor = "#0B0F14"
+secondaryBackgroundColor = "#131A22"
+textColor = "#E6E9EF"
+font = "monospace"
+```
+
+- Headline numbers across the top: `st.columns` + `st.metric` - amount
+  invested, expected return, worst year, number of holdings.
+- Charts: Plotly with `template="plotly_dark"` and the accent colour.
+- One small CSS block via `st.markdown("<style>...</style>", unsafe_allow_html=True)`
+  to tighten spacing and add thin borders to the tiles.
+
+### 2. AI coach (~45 min)
+
+The app builds the context, not the user:
+
+```python
+context = {"client": client_profile, "allocation": weights_df.to_dict(),
+           "stress_test": stress_results, "alerts": alerts}
+if q := st.chat_input("Ask about this recommendation"):
+    answer = ask(SYSTEM_PROMPT + json.dumps(context), q)
+```
+
+- Preset question buttons for the client: "Why this split?", "What happens in
+  a 2022-type year?", "What would make you change this?" - polished, and keeps
+  the demo safe.
+- System prompt rule: answer only from the context; if it isn't there, say so.
+
+### 3. Alert list - the news radar (~30 min)
+
+- Plain Python rules rank the alerts: headline about a holding -> HIGH, with
+  what happened, % of portfolio affected, suggested action; holding down >15%
+  -> MEDIUM.
+- The LLM only writes the one-line explanation. Rules decide severity.
+- Show with `st.dataframe`, or coloured `st.container`s, HIGH on top.
+
+### 4. Honesty when data is missing (~10 min)
+
+Show "Not enough data - needs human review" instead of a made-up number.
+Answers "how do you know it's right?" before the judges ask.
+
+### Who builds what
+
+| Piece | Owner |
+|---|---|
+| AI coach | Chuen |
+| Data | Frederick |
+| Alert rules + checking | Saba |
+| Theme + slides | Benjamin |
+
 ## Research - what practitioners say
 
 Reddit threads couldn't be read directly. Findings below come from articles about Reddit experiments, developer
