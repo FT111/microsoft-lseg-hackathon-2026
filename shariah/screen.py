@@ -233,10 +233,11 @@ def _ratio_screen(rule: dict, fin: dict, market_cap: dict | None, standard: str)
         inputs["long_term_interest_bearing"] = lt
         if status == PASS and breaches(extended, rule["limit"], rule["op"]):
             status = NEEDS_REVIEW
-            notes.append(f"adding long-term interest-bearing securities (${lt / 1e9:,.1f}bn) gives {extended:.1%}, "
-                         f"over the limit - the rule names 'interest-bearing items' without a maturity cut-off")
+            notes.append(f"If the company's long-term interest-bearing investments (${lt / 1e9:,.1f}bn) are counted too, "
+                         f"this would be {extended:.1%} - over the limit. The rule does not say whether to include them, "
+                         f"so a person should decide.")
         else:
-            notes.append(f"with long-term interest-bearing securities: {extended:.1%}")
+            notes.append(f"Still under the limit ({extended:.1%}) even if long-term interest-bearing investments are counted.")
 
     if found := _ai_found(fin, list(rule["numerator"]) + [den_key]):
         notes.append(f"{', '.join(found)} found by the AI in the filing text (quote verified) - a person should confirm "

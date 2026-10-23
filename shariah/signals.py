@@ -51,19 +51,25 @@ def headroom(verdict: dict) -> float:
     return min(gaps) if gaps else np.nan
 
 
-def rank(passing: dict, weights: dict = WEIGHTS) -> pd.DataFrame:
-    """passing: {ticker: screen_result}. Only stocks whose overall status is PASS are ranked.
-    Returns one row per stock, best first."""
+def rank(screened: dict, weights: dict = WEIGHTS, include_review: bool = True) -> pd.DataFrame:
+    """screened: {ticker: screen_result}. FAIL is never ranked. PASS always is; NEEDS REVIEW is
+    ranked too (include_review) with a rough compliance factor: the share of screens it passes
+    (a screen that needs review counts half). Returns one row per stock, best first."""
     rows = []
-    for t, res in passing.items():
-        if res["verdict"]["status"] != "PASS":
+    for t, res in screened.items():
+        v = res["verdict"]
+        if v["status"] == "FAIL" or (v["status"] != "PASS" and not include_review):
             continue
         try:
             m = price_metrics(t)
         except Exception:
             continue
-        m.update({"ticker": t, "company": res["fin"]["name"],
-                  "headroom": headroom(res["verdict"])})
+        screens = v.get("screens", [])
+        passed = sum(s["status"] == "PASS" for s in screens)
+        review = sum(s["status"] == "NEEDS REVIEW" for s in screens)
+        m.update({"ticker": t, "company": res["fin"]["name"], "status": v["status"], "headroom": headroom(v),
+                  "screens_passed": passed, "screens_total": len(screens),
+                  "shariah_pct": (passed + 0.5 * review) / len(screens) if screens else 0.0})
         rows.append(m)
     df = pd.DataFrame(rows)
     if df.empty:
@@ -73,13 +79,16 @@ def rank(passing: dict, weights: dict = WEIGHTS) -> pd.DataFrame:
     df["s_low_risk"] = pct(df["volatility"], asc=False)
     df["s_drawdown"] = pct(df["max_drawdown_1y"])          # less negative = better
     df["s_headroom"] = pct(df["headroom"].fillna(0))
-    df["score"] = sum(df[f"s_{k}"] * w for k, w in weights.items())
+    df["market_score"] = sum(df[f"s_{k}"] * w for k, w in weights.items())
+    # rough overall score: market factors scaled by how much of the Shariah screen is confirmed
+    df["score"] = df["market_score"] * (0.5 + 0.5 * df["shariah_pct"])
     n = len(df)
     df = df.sort_values("score", ascending=False).reset_index(drop=True)
     df["signal"] = ["Strong candidate" if i < max(1, n // 3) else "Watch" if i < max(2, 2 * n // 3) else "Lower priority"
                     for i in range(n)]
     # a stock about to breach a limit is never a strong candidate
     df.loc[df["headroom"] < 0.15, "signal"] = "Watch - near Shariah limit"
+    df.loc[df["status"] != "PASS", "signal"] = "Needs a person to check"
     return df
 
 

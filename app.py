@@ -3,6 +3,7 @@ Two pages: check any listed company (UK first), or build a screened portfolio.
 Educational hackathon project. Not financial advice. Not a fatwa."""
 import html
 import json
+import re
 
 import pandas as pd
 import plotly.express as px
@@ -183,6 +184,25 @@ def pct(v) -> str:
 
 def nice(category: str) -> str:
     return category.replace("_", " ")
+
+
+def plain_source(concept: str) -> str:
+    """'LongTermDebt + CommercialPaper' -> 'From the filing: long term debt + commercial paper'."""
+    if not concept or concept == "not reported":
+        return "not reported in the filing"
+    if concept.startswith("AI-found") or concept.startswith("Yahoo Finance"):
+        return concept
+    words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", concept).replace("dei:", "").lower()
+    words = words.replace("at carrying value", "").replace("net current", "(net)").replace("noncurrent", "(long-term)")
+    return "From the filing: " + re.sub(r"\s+", " ", words).strip()
+
+
+def why_it_matters(category: str) -> str:
+    """Which rule of the selected standard an activity falls under."""
+    for group, cats in meth["activity"]["groups"].items():
+        if category in cats:
+            return group.split(". ", 1)[-1]
+    return nice(category)
 
 
 # ---------------- header + the client (no sidebar: everything sits on the page) ----------------
@@ -431,7 +451,7 @@ def company_report(symbol: str, exchange: str) -> None:
                 continue
             src_key = {"debt": "total_debt", "cash": "cash_and_interest_bearing", "receivables_plus_cash": "receivables",
                        "noncompliant_income": "interest_income"}.get(s["key"], "")
-            rows.append(ratio_row(s, fin["sources"].get(src_key, "")))
+            rows.append(ratio_row(s, plain_source(fin["sources"].get(src_key, ""))))
         st.markdown("".join(rows), unsafe_allow_html=True)
         st.caption(f"Figures in {cur}, balance sheet dated {fin.get('period_end') or 'unknown'}. "
                    + (f"Market value {big_money('', r['mcap']['value'])} {cur} ({r['mcap']['note']})." if r.get("mcap") and
@@ -442,21 +462,29 @@ def company_report(symbol: str, exchange: str) -> None:
         st.markdown(f'<div class="label">Business activity · {STATUS_ICON[act["status"]]} {act["status"].title()}</div>',
                     unsafe_allow_html=True)
         acts = b.get("activities") or []
+        lim = meth["activity"]["limit"]
+        st.caption(f"The {standard} rules exclude a company that earns more than {lim:.0%} of its revenue from certain "
+                   "activities. Below is what we found in the company's own annual report about each one.")
         if not acts:
             st.markdown("**No excluded activity found**" + (" in the annual report." if b.get("method") == "LLM" else
                                                            " in the industry classification."))
         for a in acts:
-            share = (f"~{a['revenue_share_pct']:.0f}% of revenue" if a.get("revenue_share_pct") is not None else
-                     f"at least {a['min_revenue_share_pct']:.0f}% of revenue" if a.get("min_revenue_share_pct") else
-                     "share of revenue not stated")
-            head = f"**{nice(a['category']).capitalize()}** · {share}" + (" · main business" if a.get("primary_business") else "")
-            st.markdown(head)
+            cat, pct_ = a["category"], a.get("revenue_share_pct")
+            if a.get("primary_business"):
+                verdict_line = f"This is the company's main business, so it is excluded outright."
+            elif pct_ is not None:
+                verdict_line = (f"About {pct_:.0f}% of revenue - {'over' if pct_ > lim * 100 else 'under'} the {lim:.0%} limit.")
+            elif a.get("min_revenue_share_pct"):
+                verdict_line = f"At least {a['min_revenue_share_pct']:.0f}% of revenue, which is over the {lim:.0%} limit."
+            else:
+                verdict_line = (f"The report mentions it but does not say how much revenue it brings in, so we cannot "
+                                f"confirm it is under {lim:.0%} - a person needs to check.")
+            st.markdown(f"**{nice(cat).capitalize()}** - falls under the excluded group *{html.escape(why_it_matters(cat))}*. "
+                        f"{verdict_line}")
             if a.get("evidence"):
                 tick = "✓ quote found in the filing" if a.get("quote_verified") else "✗ quote NOT found in the filing - not used as evidence"
                 st.markdown(f'<div class="quote">{html.escape(str(a["evidence"])[:400])}<div class="meta">{tick}</div></div>',
                             unsafe_allow_html=True)
-        if act.get("note"):
-            st.caption(act["note"])
         st.caption("Checked by: " + {"LLM": "AI reading of the latest annual report, every quote verified in Python",
                                      "SIC rule": "SEC industry code only", "Industry rule": "Yahoo Finance industry only"}
                    .get(b.get("method"), str(b.get("method"))))
@@ -575,23 +603,37 @@ else:
 
     statuses = {t: r["verdict"]["status"] for t, r in results.items()}
     counts = {s: sum(x == s for x in statuses.values()) for s in STATUS_LABEL}
-    passing = [t for t, s in statuses.items() if s == PASS]
-    removed = [t for t in passing if against_values(results[t])]  # the investor's own values, not the Shariah screen
-    passing = [t for t in passing if t not in removed]
-    ranking = signals.rank({t: results[t] for t in passing}, signals.PROFILES[risk]) if passing else pd.DataFrame()
-    picks = [] if ranking.empty else ranking[~ranking["signal"].str.startswith("Watch - near")]["ticker"].head(top_n).tolist()
-    holdings = picks or ([] if ranking.empty else ranking["ticker"].head(top_n).tolist())
+    removed = [t for t in results if statuses[t] != FAIL and against_values(results[t])]  # the investor's own values
+    candidates = {t: results[t] for t in results if statuses[t] != FAIL and t not in removed}
+    ranking = signals.rank(candidates, signals.PROFILES[risk]) if candidates else pd.DataFrame()
+    passing_ranked = [] if ranking.empty else ranking[ranking["status"] == PASS]
+    picks = [] if ranking.empty else passing_ranked[~passing_ranked["signal"].str.startswith("Watch - near")]["ticker"].head(top_n).tolist()
+    holdings = picks or ([] if ranking.empty else passing_ranked["ticker"].head(top_n).tolist())
+
+    # the investor's own holdings: "AAPL 5000, TSCO.L 2000" (amounts in the market currency)
+    own_raw = st.session_state.get("own_holdings", "")
+    own, own_errors = {}, []
+    for part in re.split(r"[,\n;]+", own_raw):
+        bits = part.strip().replace("£", "").replace("$", "").split()
+        if not bits:
+            continue
+        try:
+            own[bits[0].upper()] = float(bits[1].replace(",", "")) if len(bits) > 1 else 0.0
+        except ValueError:
+            own_errors.append(part.strip())
+    own_results = {}
+    for t in own:
+        try:
+            own_results[t] = results.get(t) or screen_one(t, standard, use_llm)
+        except Exception as e:
+            own_errors.append(f"{t}: {type(e).__name__}")
 
     alloc = stt = pur = None
     if holdings:
         try:
             alloc = portfolio.build(holdings, statuses, amount, eq)
-            stt = portfolio.stress_test(alloc, amount=amount)
-            nc = {t: results[t]["verdict"]["noncompliant_income_pct"] for t in holdings}
-            pur = portfolio.purification(alloc, {t: results[t]["fin"] for t in holdings}, nc, standard)
         except portfolio.NotCompliantError as e:
             errors.append(str(e))
-            alloc = None
         except Exception as e:
             errors.append(f"portfolio: {e}")
 
@@ -601,44 +643,72 @@ else:
 that pass every screen for a <b>{risk.lower()}</b> risk profile, and show what that means for {C}{amount:,.0f} - with the
 evidence behind every result.</p></div>""", unsafe_allow_html=True)
 
-    if alloc is None:
-        st.info("No company in this list passes every screen of this standard, so there is nothing to invest in yet. "
-                "Non-US companies always need a person to confirm the business-activity screen - try the US market.")
+    names = {} if ranking.empty else {r["ticker"]: r["company"] for _, r in ranking.iterrows()}
+    names.update({t: r["fin"]["name"] for t, r in own_results.items()})
+
+    # ---- 1 + 2. the portfolio and the picks, side by side ----
+    left, right = st.columns([1, 1.1], gap="large")
+    with left:
+        heading("1 · Your portfolio", f"{C}{amount:,.0f} new money" + (f" + {C}{sum(own.values()):,.0f} you already hold" if own else ""))
+        with st.container(key="panel_donut"):
+            st.text_input("Add what you already own - ticker and amount, e.g. AAPL 5000, TSCO.L 2000",
+                          key="own_holdings", placeholder="AAPL 5000, MSFT 3000")
+            if own_errors:
+                st.caption("Couldn't read: " + "; ".join(own_errors))
+            slices = []
+            if alloc is not None:
+                for _, row in alloc.iterrows():
+                    slices.append({"label": names.get(row["holding"], "Non-interest cash" if row["holding"] == "CASH" else row["holding"]),
+                                   "amount": row["amount"], "kind": "recommended"})
+            for t, amt in own.items():
+                st_ = own_results.get(t, {}).get("verdict", {}).get("status")
+                slices.append({"label": f"{STATUS_ICON.get(st_, '')} {names.get(t, t)} (yours)", "amount": amt, "kind": "yours"})
+            if slices and sum(x["amount"] for x in slices) > 0:
+                donut = pd.DataFrame(slices)
+                fig = px.pie(donut, names="label", values="amount", hole=.5, color_discrete_sequence=BLUES)
+                fig.update_traces(textinfo="percent+label", textposition="inside", insidetextorientation="radial",
+                                  hovertemplate=f"%{{label}}<br>{C}%{{value:,.0f}} (%{{percent}})<extra></extra>")
+                fig.update_layout(showlegend=False)
+                st.plotly_chart(styled(fig, 480), width="stretch")
+            else:
+                st.info("Nothing to show yet: no company in this list passes every screen, and you haven't added your own "
+                        "holdings. Non-US companies always need a person to confirm the business-activity screen.")
+            if own_results:
+                st.markdown("".join(
+                    f'<div class="meta">{STATUS_ICON.get(r["verdict"]["status"], "")} <b>{html.escape(r["fin"]["name"])}</b> '
+                    f'({t}) - {STATUS_LABEL[r["verdict"]["status"]]}'
+                    + (": " + html.escape("; ".join(r["verdict"]["reasons"] + r["verdict"]["review"])[:140]) if r["verdict"]["status"] != PASS else "")
+                    + '</div>' for t, r in own_results.items()), unsafe_allow_html=True)
+            st.caption("New money goes only into stocks that pass every screen - calmer stocks get a larger share, capped at "
+                       "10% each, remainder in non-interest cash. Your own holdings are shown as you entered them, with their "
+                       "screening result.")
+
+    with right:
+        heading("2 · Ten recommended picks", f"{risk} profile · rough score out of 100")
+        with st.container(key="panel_top"):
+            if ranking.empty:
+                st.info("No company in this list can be ranked yet.")
+            rows = []
+            for i, (_, r) in enumerate(ranking.head(10).iterrows(), 1):
+                share = alloc.set_index("holding")["amount"].get(r["ticker"]) if alloc is not None else None
+                rows.append(f'<div class="row"><div><div class="name">{i}. {STATUS_ICON[r["status"]]} {html.escape(r["company"])}</div>'
+                            f'<div class="meta">{r["ticker"]} · Shariah screens {int(r["screens_passed"])}/{int(r["screens_total"])} passed · '
+                            f'{r["return_1y"]:+.0%} past year'
+                            + (f" · {C}{share:,.0f} in your plan" if share else "") + '</div>'
+                            f'<span class="tag{" warn" if r["signal"].startswith(("Watch - near", "Needs")) else ""}">{r["signal"]}</span></div>'
+                            f'<div class="score">{r["score"]:.0f}</div></div>')
+            st.markdown("".join(rows), unsafe_allow_html=True)
+            st.caption("Score = momentum, steadiness, smaller falls and room below the Shariah limits, scaled by how many "
+                       "screens are confirmed. Companies that need a person to check are shown with a rough score but are "
+                       "not bought with new money until confirmed. Failed companies are not shown.")
+
+    if alloc is None and not own:
         if errors:
             with st.expander(f"{len(errors)} items could not be loaded"):
                 st.write(errors)
-    else:
-        names = {r["ticker"]: r["company"] for _, r in ranking.iterrows()}
-
-        # ---- 1. the portfolio ----
-        heading("1 · Your portfolio", f"{C}{amount:,.0f} · {len(holdings)} stocks · max 10% in any one")
-        with st.container(key="panel_donut"):
-            donut = alloc.assign(label=alloc["holding"].map(lambda h: names.get(h, "Non-interest cash" if h == "CASH" else h)))
-            fig = px.pie(donut, names="label", values="amount", hole=.55, color_discrete_sequence=BLUES)
-            fig.update_traces(textinfo="percent+label", textposition="inside", insidetextorientation="radial",
-                              hovertemplate=f"%{{label}}<br>{C}%{{value:,.0f}} (%{{percent}})<extra></extra>")
-            fig.update_layout(showlegend=False)
-            st.plotly_chart(styled(fig, 520), width="stretch")
-            st.caption("Every holding passed every screen of the selected standard. Calmer stocks get a larger share "
-                       "(inverse volatility), capped at 10% each; any remainder is non-interest-bearing cash. "
-                       "Deterministic maths - the AI does not choose the numbers.")
-
-        # ---- 2. the ten picks ----
-        heading("2 · Ten recommended picks", f"{risk} profile · ranked by momentum, steadiness and Shariah headroom")
-        with st.container(key="panel_top"):
-            rows = []
-            for i, (_, r) in enumerate(ranking.head(10).iterrows(), 1):
-                share = alloc.set_index("holding")["amount"].get(r["ticker"])
-                rows.append(f'<div class="row"><div><div class="name">{i}. {html.escape(r["company"])}</div>'
-                            f'<div class="meta">{r["ticker"]} · {r["return_1y"]:+.0%} over the past year · '
-                            f'{r["headroom"]:.0%} room below the nearest Shariah limit'
-                            + (f" · {C}{share:,.0f} in your plan" if share else " · not in your plan") + '</div>'
-                            f'<span class="tag{" warn" if r["signal"].startswith("Watch - near") else ""}">{r["signal"]}</span></div>'
-                            f'<div class="score">{r["score"]:.0f}/100</div></div>')
-            st.markdown("".join(rows), unsafe_allow_html=True)
-            st.caption("Only stocks that pass every screen are ranked. This ranks candidates for holding; it does not "
-                       "predict prices. Open any company on the Check a company page for the evidence and the committee.")
-
+    if ranking.empty:
+        st.stop()
+    if True:
         # ---- 3. presence in Muslim-majority markets ----
         heading("3 · Three picks with a footprint in Muslim-majority markets",
                 "what their own annual reports say")
@@ -648,7 +718,7 @@ evidence behind every result.</p></div>""", unsafe_allow_html=True)
                         "Switch to the US market to see it.")
             else:
                 with st.spinner("Reading the annual reports..."):
-                    footprint = markets.rank(ranking["ticker"].tolist(), top=3)
+                    footprint = markets.rank(ranking[ranking["status"] == PASS]["ticker"].tolist(), top=3)
                 if not footprint:
                     st.info("None of the passing companies' annual reports name a Muslim-majority country.")
                 for i, f in enumerate(footprint, 1):
