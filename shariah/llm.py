@@ -12,7 +12,7 @@ from .cache import cached
 load_dotenv()
 
 ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "https://app-uoaihack2ix6ak.azurewebsites.net")
-MODEL = os.getenv("CHAT_MODEL", "gpt-6.1-sol")
+MODEL = os.getenv("CHAT_MODEL", "gpt-6-astra")
 API_VERSION = "2024-12-01-preview"
 
 

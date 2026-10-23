@@ -34,6 +34,8 @@ def history(ticker: str, start: str = "2007-01-01") -> pd.Series:
         try:
             return _yahoo(ticker)
         except Exception:
+            if "." in ticker:  # Stooq fallback is US-only here; don't fetch a different company
+                raise
             return _stooq(ticker)
     data = cached(f"prices_{ticker}", produce)
     s = pd.Series(data["close"], index=pd.to_datetime(data["date"]), name=ticker).sort_index()

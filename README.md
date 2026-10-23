@@ -1,24 +1,47 @@
-# Halal Stock Analyst - Shariah screener with an AI investment committee
+# AMANAT - Shariah stock screening with an AI investment committee
 
 Educational hackathon project (Microsoft x LSEG 2026). **Not financial advice. Not a fatwa** -
 passing these screens is not a religious ruling or a guarantee of compliance.
 
-The app screens 32 US companies against **one** Shariah standard at a time (FTSE Yasaar or
-AAOIFI, never mixed), ranks only the companies that pass every screen, splits an investor's
-money across them, stress-tests the result and works out purification. A four-agent committee
-then explains any single stock, with the Shariah Compliance Checker in charge.
+Two pages. **Check a company**: search any listed company (UK first) and get Pass / Fail / Needs
+review against **one** Shariah standard at a time (FTSE Yasaar or AAOIFI, never mixed), every ratio
+against its limit, the annual-report evidence, and a four-agent investment committee led by the
+Shariah compliance check. **Build my portfolio**: screen a stock list, rank only the companies that
+pass every screen, split the money (max 10% each), stress-test past bad years and work out
+purification. Team notes: `HANDOFF.md`.
 
 ## Setup
 
 ```bash
 cp .env.example .env          # add OPENAI_API_KEY (team key) and SEC_USER_AGENT (your name + email)
-uv sync                       # or: pip install openai python-dotenv streamlit pandas plotly requests
-uv run python warm_cache.py   # first run: downloads SEC data, prices, 10-K text and AI readings (~5 min)
+uv sync                       # or: pip install openai python-dotenv streamlit pandas plotly requests yfinance
+uv run python warm_cache.py   # first run: downloads SEC + Yahoo data, prices, 10-K text and AI readings (~8 min)
 uv run streamlit run app.py
 ```
 
 Everything downloaded or produced by the AI is cached in `data_cache/`, so after `warm_cache.py`
 the app runs offline. `warm_cache.py --committee MSFT JPM AAPL` also pre-runs the committee.
+
+### Pitch deck (7 slides, ~8 minutes)
+
+```bash
+uv run streamlit run presentation.py      # or: streamlit run presentation.py
+```
+
+Click the deck once, then use **← / →** (or Space / PageUp / PageDown), **1-7** to jump, **N** for
+speaker notes (with speaking time per slide), **T** for the 8:00 timer. The full script is also in
+an expander under the deck. For projecting, use **Download standalone deck (.html)**, open the
+file in a browser and press **F** for full screen; `deck.html#4` opens straight on slide 4.
+
+- The Microsoft and JPMorgan figures are **demo data typed from the annual reports** (not fetched
+  live). `shariah/deck_demo.py` calculates every percentage and takes each limit from
+  `methodology.py`. It also checks each figure against the cached SEC XBRL data and shows
+  "SEC match" or "not cross-checked".
+- The Microsoft ratios are **preliminary**: the input definitions are not verified, and the activity
+  and income screens are not part of the demo, so the slide shows overall NEEDS REVIEW.
+- JPMorgan's 52.31% (net interest income / total net revenue) is an **illustrative indicator, not
+  the FTSE non-compliant-income ratio**. The business-activity outcome comes from the real screening
+  engine (`pipeline.screen_one`, rule 4.3.1), using evidence from the 10-K, not from the ticker.
 
 Tests (fictional data, no network): `uv run python -m unittest discover -s tests -t .`
 Real-data check: `uv run python smoke_test.py`
@@ -80,11 +103,15 @@ Design notes: `docs/agent-architecture.md`.
 
 ## Limitations
 
-- US companies only (SEC EDGAR). Figures are whatever companies tagged in XBRL; untagged items are
-  NEEDS REVIEW, not zero.
-- Business activities come from the latest 10-K: Item 1 (first 12,000 characters) plus every
+- US companies: SEC EDGAR XBRL figures, whatever companies tagged; untagged items are NEEDS REVIEW,
+  not zero. UK / non-SEC companies: Yahoo Finance's copy of the accounts (a vendor copy, not the
+  filing), with lease liabilities excluded from debt like the SEC path.
+- US business activities come from the latest 10-K: Item 1 (first 12,000 characters) plus every
   sentence in the filing that mentions a screened activity. Revenue shares are often not disclosed,
   so retailers and conglomerates frequently land in NEEDS REVIEW.
+- UK business activities come from the industry classification only. That can exclude a company
+  (banks, brewers, tobacco, gambling, hotels) but can never clear one, so every other UK company is
+  NEEDS REVIEW until an annual-report source is wired in for the AI reading.
 - "Cash and interest-bearing items" uses cash + short-term investments; long-term interest-bearing
   securities are shown separately and send a screen to NEEDS REVIEW if they would break the limit.
 - FTSE's quarter-on-quarter monitoring rule needs history the app does not check.
@@ -93,10 +120,10 @@ Design notes: `docs/agent-architecture.md`.
 
 ## Layout
 
-- `app.py` - Streamlit UI (screening, committee, picks, portfolio, stress test & purification, Ask, methodology).
-- `amanat_app.py`, `amanat/` - the team's separate LLM-led analyser prototype and its test UI (unchanged).
+- `app.py` - the AMANAT website (check a company + committee; build a portfolio).
+- `analyser_test.py`, `amanat/` - the team's separate LLM-led analyser prototype and its test UI (unchanged).
 - `shariah/methodology.py` - the two standards as data, with sources.
-- `shariah/edgar.py`, `prices.py`, `cache.py` - data retrieval and the offline cache.
+- `shariah/edgar.py`, `yahoo.py`, `prices.py`, `cache.py` - US (SEC) and UK (Yahoo) data, prices, offline cache.
 - `shariah/screen.py`, `pipeline.py` - deterministic screening.
 - `shariah/llm.py` - Azure OpenAI calls (key from `OPENAI_API_KEY`, never in code).
 - `shariah/signals.py`, `portfolio.py` - ranking, allocation, stress test, purification.

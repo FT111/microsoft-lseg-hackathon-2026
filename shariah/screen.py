@@ -37,6 +37,43 @@ POSSIBLE_SIC_WORDS = {"aircraft": "weapons_defence", "eating places": "alcohol",
                       "sausages": "pork", "grocery": "alcohol", "retail": "alcohol"}
 
 
+# Yahoo Finance industry names (UK / non-SEC companies). Same idea as the SIC rule: a clearly
+# prohibited primary business -> FAIL on verified evidence; "possible" -> unknown share -> NEEDS REVIEW.
+EXCLUDED_INDUSTRY_WORDS = {
+    "banks": "conventional_finance", "credit services": "conventional_finance",
+    "mortgage finance": "conventional_finance", "capital markets": "conventional_finance",
+    "financial conglomerates": "conventional_finance", "insurance": "conventional_insurance",
+    "tobacco": "tobacco", "brewers": "alcohol", "wineries & distilleries": "alcohol",
+    "gambling": "gambling", "casinos": "gambling", "lodging": "hotels", "entertainment": "cinema",
+}
+POSSIBLE_INDUSTRY_WORDS = {"asset management": "conventional_finance", "aerospace & defense": "weapons_defence",
+                           "grocery": "alcohol", "restaurants": "alcohol", "packaged foods": "non_halal_food",
+                           "beverages": "alcohol", "leisure": "gambling", "reit": "conventional_finance",
+                           "specialty retail": "alcohol", "department stores": "alcohol"}
+
+
+def industry_rule(sector: str | None, industry: str | None) -> dict:
+    """Fallback business finding from Yahoo Finance's sector/industry (no filing text available)."""
+    label = f"{sector or ''} / {industry or ''}".strip(" /")
+    d = label.lower()
+    acts = []
+    for word, cat in EXCLUDED_INDUSTRY_WORDS.items():
+        if word in d:
+            acts.append({"category": cat, "revenue_share_pct": 100.0, "min_revenue_share_pct": 100.0,
+                         "confidence": "high", "primary_business": True, "quote_verified": True,
+                         "evidence": f"Yahoo Finance industry: {label}"})
+            break
+    else:
+        for word, cat in POSSIBLE_INDUSTRY_WORDS.items():
+            if word in d:
+                acts.append({"category": cat, "revenue_share_pct": None, "min_revenue_share_pct": 0.0,
+                             "confidence": "low", "primary_business": False, "quote_verified": True,
+                             "evidence": f"Yahoo Finance industry: {label}"})
+                break
+    return {"method": "Industry rule", "activities": acts, "main_business": label,
+            "evidence": f"Yahoo Finance industry: {label}", "main_quote_verified": False}
+
+
 def sic_rule(sic_description: str) -> dict:
     """Fallback business finding from the SEC industry code (no AI). It can identify a
     non-compliant primary business, but it cannot rule out secondary non-compliant revenue."""
@@ -92,7 +129,7 @@ def _activity_screen(business: dict, standard: str) -> tuple[dict, float | None,
     base = dict(key="activity", label="Non-permitted business activities / total revenue", clause=m["clause"],
                 text=m["text"], limit=m["limit"], op=m["op"])
 
-    if business.get("method") not in ("LLM", "SIC rule") or business.get("error"):
+    if business.get("method") not in ("LLM", "SIC rule", "Industry rule") or business.get("error"):
         return _screen(**base, status=NEEDS_REVIEW,
                        note="business activities could not be read: " + (business.get("error") or "no source")), None, 0.0
 
@@ -131,8 +168,8 @@ def _activity_screen(business: dict, standard: str) -> tuple[dict, float | None,
     if outside:
         problems.append("activity found that this standard's verified list does not name: " +
                         ", ".join(a["category"].replace("_", " ") for a in outside))
-    if business.get("method") == "SIC rule" and not relevant:
-        problems.append("only the SEC industry code was checked (no AI reading of the annual report) - "
+    if business.get("method") in ("SIC rule", "Industry rule") and not relevant:
+        problems.append("only the industry classification was checked (no AI reading of the annual report) - "
                         "secondary non-compliant revenue cannot be ruled out")
     if business.get("method") == "LLM" and not relevant and not business.get("main_quote_verified"):
         problems.append("the AI's description of the main business could not be matched to the filing text")
