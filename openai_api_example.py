@@ -4,7 +4,7 @@ from openai import AzureOpenAI
 from dotenv import load_dotenv
 
 endpoint = "https://app-uoaihack2ix6ak.azurewebsites.net"
-model_name = "gpt-6.1-sol"
+model_name = "gpt-6-astra"
 dotenv_dict = load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
@@ -15,6 +15,8 @@ client = AzureOpenAI(
     azure_endpoint=endpoint,
     api_key=api_key,
 )
+
+print(client.models.list())
 
 response = client.chat.completions.create(
     messages=[

@@ -1,7 +1,7 @@
-# AGENTS.md — ShariahLens AI
+# AGENTS.md — Amanat
 
 ## Project
-Build **ShariahLens AI**, an AI-powered Shariah stock-screening web app for Muslim investors. Users can search for a listed company, review its business activities and financial ratios, and understand whether it passes a selected Shariah screening methodology.
+Build **Amanat**, an AI-powered Shariah stock-screening web app for Muslim investors. Users can search for a listed company, review its business activities and financial ratios, and understand whether it passes a selected Shariah screening methodology.
 
 ## Methodology
 - Use the latest official **FTSE Yasaar Global Equity Shariah** methodology as the primary standard: https://www.lseg.com/en/ftse-russell/indices/global-shariah
