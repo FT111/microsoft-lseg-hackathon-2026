@@ -16,6 +16,13 @@ from . import prices
 
 WEIGHTS = {"momentum": 0.35, "low_risk": 0.25, "drawdown": 0.15, "headroom": 0.25}
 
+# Risk appetite changes what "good" means for this investor.
+PROFILES = {
+    "Cautious":    {"momentum": 0.15, "low_risk": 0.35, "drawdown": 0.25, "headroom": 0.25},
+    "Balanced":    WEIGHTS,
+    "Adventurous": {"momentum": 0.55, "low_risk": 0.10, "drawdown": 0.10, "headroom": 0.25},
+}
+
 
 def price_metrics(ticker: str) -> dict:
     s = prices.history(ticker)
@@ -50,7 +57,7 @@ def headroom(verdict: dict, standard_rules: dict) -> float:
     return min(gaps) if gaps else np.nan
 
 
-def rank(passing: dict, standard_rules: dict) -> pd.DataFrame:
+def rank(passing: dict, standard_rules: dict, weights: dict = WEIGHTS) -> pd.DataFrame:
     """passing: {ticker: screen_result}. Returns one row per stock, best first."""
     rows = []
     for t, res in passing.items():
@@ -69,7 +76,7 @@ def rank(passing: dict, standard_rules: dict) -> pd.DataFrame:
     df["s_low_risk"] = pct(df["volatility"], asc=False)
     df["s_drawdown"] = pct(df["max_drawdown_1y"])          # less negative = better
     df["s_headroom"] = pct(df["headroom"].fillna(0))
-    df["score"] = sum(df[f"s_{k}"] * w for k, w in WEIGHTS.items())
+    df["score"] = sum(df[f"s_{k}"] * w for k, w in weights.items())
     n = len(df)
     df = df.sort_values("score", ascending=False).reset_index(drop=True)
     df["signal"] = ["Strong candidate" if i < max(1, n // 3) else "Watch" if i < max(2, 2 * n // 3) else "Lower priority"

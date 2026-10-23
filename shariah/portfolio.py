@@ -33,8 +33,9 @@ def build(equity_tickers, amount=100_000, equity_share=0.60, sukuk_share=0.30, s
     w = equity_weights(equity_tickers, cap=cap / equity_share if equity_share else cap) * equity_share
     rows = [{"holding": t, "sleeve": "Shariah equities", "weight": float(x)} for t, x in w.items()]
     rows.append({"holding": sukuk, "sleeve": "Sukuk (Islamic bonds)", "weight": sukuk_share})
-    rows.append({"holding": "CASH", "sleeve": "Non-interest cash (payout reserve)", "weight": cash_share})
+    rows.append({"holding": "CASH", "sleeve": "Non-interest cash", "weight": cash_share})
     df = pd.DataFrame(rows)
+    df = df[df["weight"] > 1e-9].reset_index(drop=True)
     df["amount"] = df["weight"] * amount
     return df
 
@@ -50,13 +51,10 @@ def calendar_year_return(ticker: str, year: int) -> float | None:
     return float(y.iloc[-1] / prev.iloc[-1] - 1)
 
 
-def stress_test(alloc: pd.DataFrame, years=(2008, 2020, 2022), payout_rate=0.04,
-                scholarship_cost=500, amount=100_000) -> pd.DataFrame:
-    """Portfolio return in past bad years, and what that means in scholarships.
-    Holdings without data for a year (e.g. the sukuk ETF before it existed) use the
-    sleeve average of what is available, and are flagged."""
+def stress_test(alloc: pd.DataFrame, years=(2008, 2020, 2022), amount=100_000) -> pd.DataFrame:
+    """What past bad (and good) years would have done to this portfolio, in money.
+    Holdings with no data for a year (e.g. listed later) count as 0% and are flagged."""
     out = []
-    normal_scholarships = int(amount * payout_rate // scholarship_cost)
     for y in years:
         total, missing = 0.0, []
         for _, row in alloc.iterrows():
@@ -65,11 +63,8 @@ def stress_test(alloc: pd.DataFrame, years=(2008, 2020, 2022), payout_rate=0.04,
                 missing.append(row["holding"])
                 r = 0.0
             total += row["weight"] * r
-        end_value = amount * (1 + total)
-        out.append({"year": y, "portfolio_return": total, "value_after": end_value,
-                    "scholarships": int(end_value * payout_rate // scholarship_cost),
-                    "normal_scholarships": normal_scholarships,
-                    "missing_data": ", ".join(missing)})
+        out.append({"year": y, "portfolio_return": total, "value_after": amount * (1 + total),
+                    "gain_or_loss": amount * total, "no_data_for": ", ".join(missing)})
     return pd.DataFrame(out)
 
 

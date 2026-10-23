@@ -9,23 +9,23 @@ import streamlit as st
 from shariah import edgar, llm, portfolio, prices, screen, signals
 from shariah.universe import SUKUK_ETF, UNIVERSE
 
-st.set_page_config(page_title="Waqf Analyst", layout="wide")
+st.set_page_config(page_title="Halal Stock Analyst", layout="wide")
 st.markdown("""<style>
 div[data-testid="stMetric"] {border:1px solid #24303d; border-radius:6px; padding:10px 14px;}
 .block-container {padding-top:1.5rem;}
 </style>""", unsafe_allow_html=True)
 
-st.title("Waqf Analyst")
-st.caption("AI-assisted Shariah screening and allocation for a mosque endowment · "
+st.title("Halal Stock Analyst")
+st.caption("AI-assisted Shariah stock screening and picks for everyday Muslim investors · "
            "Educational hackathon project. Not financial advice. Not a fatwa.")
 
 # ---------------- sidebar: the client ----------------
 with st.sidebar:
-    st.header("Client")
-    amount = st.number_input("Endowment ($)", 10_000, 10_000_000, 100_000, step=10_000)
+    st.header("Your profile")
+    amount = st.number_input("Amount to invest ($)", 1_000, 10_000_000, 100_000, step=5_000)
     standard = st.radio("Screening standard", list(screen.STANDARDS))
-    payout = st.slider("Annual payout to scholarships", 0.02, 0.06, 0.04, 0.005, format="%.3f")
-    cost = st.number_input("Cost of one scholarship ($)", 100, 10_000, 500, step=100)
+    risk = st.radio("Risk appetite", list(signals.PROFILES), index=1, horizontal=True,
+                    help="Cautious favours steadier stocks; Adventurous favours stronger recent momentum.")
     top_n = st.slider("Stocks to hold", 3, 20, 10)
     eq = st.slider("Share in Shariah stocks", 0.5, 1.0, 1.0, 0.05)
     sk = st.slider("Sukuk (optional)", 0.0, 1.0 - eq, 0.0, 0.05) if eq < 1.0 else 0.0
@@ -89,7 +89,7 @@ with tab_screen:
             st.write(errors)
 
 passing = [t for t, r in results.items() if r["verdict"]["status"] == "PASS"]
-ranking = signals.rank({t: results[t] for t in passing}, screen.STANDARDS[standard]) if passing else pd.DataFrame()
+ranking = signals.rank({t: results[t] for t in passing}, screen.STANDARDS[standard], signals.PROFILES[risk]) if passing else pd.DataFrame()
 picks = [] if ranking.empty else ranking[~ranking["signal"].str.startswith("Watch - near")]["ticker"].head(top_n).tolist()
 
 with tab_picks:
@@ -142,27 +142,31 @@ with tab_alloc:
         st.session_state["alloc"] = alloc
         a, b, c = st.columns(3)
         a.metric("Holdings", len(alloc))
-        b.metric("Annual payout", f"${amount * payout:,.0f}")
-        c.metric("Scholarships / year", int(amount * payout // cost))
+        b.metric("Invested", f"${amount:,.0f}")
+        c.metric("Largest holding", f"{alloc['weight'].max():.0%}")
         st.plotly_chart(px.sunburst(alloc, path=["sleeve", "holding"], values="amount",
                                     template="plotly_dark"), use_container_width=True)
         st.dataframe(alloc, use_container_width=True, hide_index=True,
                      column_config={"weight": st.column_config.NumberColumn(format="percent"),
                                     "amount": st.column_config.NumberColumn(format="dollar")})
-        st.caption("Equities: inverse-volatility weights (calmer stocks get more), max 10% of the fund each. "
+        st.caption("Top-ranked compliant stocks, inverse-volatility weights (calmer stocks get more), max 10% each. "
                    "Deterministic maths - the AI does not choose the numbers.")
 
 with tab_stress:
     alloc = st.session_state.get("alloc")
     if alloc is not None:
-        stt = portfolio.stress_test(alloc, payout_rate=payout, scholarship_cost=cost, amount=amount)
-        st.subheader("What a bad year means for scholarships")
+        stt = portfolio.stress_test(alloc, amount=amount)
+        st.subheader(f"What past years would have done to your ${amount:,.0f}")
+        worst = stt.loc[stt["portfolio_return"].idxmin()]
+        st.metric(f"Worst of these years ({int(worst['year'])})", f"${worst['value_after']:,.0f}",
+                  f"{worst['gain_or_loss']:+,.0f}")
         st.dataframe(stt, use_container_width=True, hide_index=True,
                      column_config={"portfolio_return": st.column_config.NumberColumn(format="percent"),
-                                    "value_after": st.column_config.NumberColumn(format="dollar")})
+                                    "value_after": st.column_config.NumberColumn(format="dollar"),
+                                    "gain_or_loss": st.column_config.NumberColumn(format="dollar")})
         nc = {t: results[t]["verdict"]["noncompliant_income_pct"] for t in passing}
         pur = portfolio.purification(alloc, {t: results[t]["fin"] for t in passing}, nc)
-        st.subheader("Purification - dividends to donate")
+        st.subheader("Purification - share of your dividends to give to charity")
         if not pur.empty:
             st.metric("To donate this year", f"${pur['to_purify'].sum():,.2f}")
             st.dataframe(pur, use_container_width=True, hide_index=True)
@@ -171,19 +175,19 @@ with tab_ask:
     if not llm.available():
         st.info("Add OPENAI_API_KEY to .env to enable the AI coach.")
     else:
-        context = {"client": {"type": "UK mosque waqf", "amount": amount, "payout": payout,
-                              "scholarship_cost": cost, "standard": standard},
+        context = {"investor": {"type": "individual Muslim investor", "amount": amount, "risk_appetite": risk,
+                                "standard": standard},
                    "screen": {t: {"status": r["verdict"]["status"], "reasons": r["verdict"]["reasons"],
                                   "review": r["verdict"]["review"], "evidence": r["business"].get("evidence")}
                               for t, r in results.items()},
                    "stock_ranking": ranking.drop(columns=[c for c in ranking.columns if c.startswith("s_")]).to_dict("records") if not ranking.empty else [],
                    "allocation": st.session_state["alloc"].to_dict("records")
                    if st.session_state.get("alloc") is not None else []}
-        system = ("You explain an investment recommendation to the trustees of a mosque endowment. Answer ONLY from "
+        system = ("You explain a Shariah-compliant stock recommendation to an everyday Muslim investor. Answer ONLY from "
                   "the JSON context. If the answer is not in it, say so. Plain English, short. Not financial advice.\n"
                   + json.dumps(context, default=str))
         presets = ["Which stocks look strongest and why?", "Why was this split chosen?", "Which companies failed and why?",
-                   "What happens to scholarships in a bad year?", "What would make you change this?"]
+                   "What would a bad year do to my money?", "What would make you change this?"]
         cols = st.columns(len(presets))
         q = None
         for col, p in zip(cols, presets):
