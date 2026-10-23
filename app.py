@@ -288,7 +288,7 @@ if st.button("Run analysis", use_container_width=True) or request_review:
 
     if result.research.get("used_web_research"):
         with st.expander("How web research affected this report", expanded=True):
-            st.info(result.research.get("impact", "Additional trusted web research was used."))
+            st.info(result.research.get("impact", "Additional web search research was used."))
             for change in result.research.get("changes", []):
                 if isinstance(change, dict):
                     st.markdown(

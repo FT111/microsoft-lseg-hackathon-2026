@@ -78,6 +78,17 @@ class StockAnalyserTests(unittest.TestCase):
         self.assertEqual(len(inference.calls), 2)
         self.assertFalse(result.research["used_web_research"])
 
+    def test_search_requests_allow_five_bounded_queries(self) -> None:
+        requests = json.dumps(
+            {
+                "web_search_requests": [
+                    {"query": f"query {index}", "reason": "missing evidence"}
+                    for index in range(5)
+                ]
+            }
+        )
+        self.assertEqual(len(StockAnalyser._search_requests(requests)), 5)
+
     def test_analyser_returns_typed_result_and_keeps_source_evidence(self) -> None:
         client = FakeInference(
             json.dumps(
@@ -228,7 +239,26 @@ class StockAnalyserTests(unittest.TestCase):
 
         self.assertEqual(search.queries, ["Example Corp official annual report"])
         self.assertEqual(len(inference.calls), 2)
-        self.assertIn("TRUSTED WEB SOURCE", inference.calls[1][1])
+        self.assertIn("WEB SEARCH SOURCE", inference.calls[1][1])
         self.assertIs(result.overall_status, ScreenStatus.PASS)
         self.assertTrue(result.research["used_web_research"])
         self.assertIn("https://sec.gov/example", result.research["source_urls"])
+
+    def test_official_conventional_finance_classification_disqualifies_company(self) -> None:
+        classification = Document(
+            url="https://data.sec.gov/submissions/CIK0000000000.json",
+            title="Example SEC issuer classification",
+            text="SIC description: NATIONAL COMMERCIAL BANKS",
+        )
+        response = json.dumps(
+            {
+                "overall_status": "NEEDS REVIEW",
+                "summary": "ambiguous",
+                "screens": [],
+            }
+        )
+        result = StockAnalyser(FakeInference(response)).analyse(
+            Stock("JPM", "JPMorgan Chase"), [document(), classification]
+        )
+        self.assertIs(result.overall_status, ScreenStatus.FAIL)
+        self.assertEqual(result.screens[0].status, ScreenStatus.FAIL)
