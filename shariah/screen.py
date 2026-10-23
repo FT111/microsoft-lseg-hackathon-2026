@@ -46,6 +46,29 @@ def sic_rule(sic_description: str) -> dict:
             "confidence": "rule", "method": "SIC rule"}
 
 
+# Yahoo Finance industry names (used for UK / non-SEC companies). "check" -> REVIEW, not FAIL.
+EXCLUDED_INDUSTRY_WORDS = {
+    "banks": "conventional finance", "credit services": "conventional finance",
+    "mortgage finance": "conventional finance", "capital markets": "conventional finance",
+    "financial conglomerates": "conventional finance", "insurance": "conventional insurance",
+    "asset management": "conventional finance - check", "tobacco": "tobacco",
+    "brewers": "alcohol", "wineries & distilleries": "alcohol", "gambling": "gambling",
+    "casinos": "gambling", "lodging": "hotels / entertainment", "entertainment": "entertainment",
+    "aerospace & defense": "possible defence - check", "reit": "real estate - check income sources",
+}
+
+
+def industry_rule(sector: str | None, industry: str | None) -> dict:
+    d = f"{sector or ''} / {industry or ''}".lower()
+    for word, why in EXCLUDED_INDUSTRY_WORDS.items():
+        if word in d:
+            return {"noncompliant_pct": 100.0 if "check" not in why else None,
+                    "categories": [why], "evidence": f"Yahoo Finance industry: {industry}",
+                    "confidence": "rule", "method": "Industry rule"}
+    return {"noncompliant_pct": 0.0, "categories": [], "evidence": f"Yahoo Finance industry: {industry}",
+            "confidence": "rule", "method": "Industry rule"}
+
+
 def ratios(fin: dict, market_cap: float | None) -> dict:
     ta = fin.get("total_assets") or 0
     out = {}

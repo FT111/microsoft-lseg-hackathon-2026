@@ -77,7 +77,8 @@ def purification(alloc: pd.DataFrame, fin_by_ticker: dict, nc_by_ticker: dict) -
         fin = fin_by_ticker.get(t)
         if not fin or not fin.get("shares_outstanding"):
             continue
-        mcap = fin["shares_outstanding"] * prices.last_price(t)
+        # UK companies carry a currency-corrected market cap (price in pence, accounts in $ or GBP)
+        mcap = fin.get("market_cap") or fin["shares_outstanding"] * prices.last_price(t)
         yld = (fin.get("dividends_paid") or 0) / mcap if mcap else 0
         dividend = row["amount"] * yld
         nc = nc_by_ticker.get(t) or 0

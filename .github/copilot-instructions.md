@@ -15,6 +15,7 @@ and explains each pick. Read `PLAN.md` first for the idea, timeline and demo scr
   risk-appetite weight profiles.
 - `shariah/portfolio.py` - allocation, stress test, purification.
 - `shariah/prices.py` - Yahoo chart API, Stooq fallback.
+- `shariah/yahoo.py` - company search + fundamentals for UK (.L) and other non-SEC companies (yfinance).
 - `shariah/llm.py` - Azure OpenAI (organisers' endpoint), key from `OPENAI_API_KEY`.
 - `shariah/cache.py` - every network and LLM result is cached in `data_cache/`.
 
@@ -31,4 +32,4 @@ and explains each pick. Read `PLAN.md` first for the idea, timeline and demo scr
 
 ## Run
 
-`streamlit run app.py` (after `pip install openai python-dotenv streamlit pandas plotly requests`).
+`streamlit run app.py` (after `pip install openai python-dotenv streamlit pandas plotly requests yfinance`).
