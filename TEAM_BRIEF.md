@@ -304,7 +304,6 @@ links to its source" - plus one stress-test number in the client's terms.
 Sources: [Benzinga - Redditor's ChatGPT experiment](https://www.benzinga.com/markets/equities/25/08/46783783/redditors-100-chatgpt-day-trading-experiment-trounces-two-benchmark-indexes-with-24-returns-here)
 - [LLM news sentiment and stock prediction (arXiv 2026)](https://arxiv.org/html/2602.00086v2)
 - [LSEG Developers - stock insights from news with LLMs](https://developers.lseg.com/en/article-catalog/article/ai-driven-stock-insights--analyzing-financial-news-with-llms)
-- [Why yfinance broke](https://deepcharts.substack.com/p/why-did-the-yfinance-python-library)
 - [Four free stock APIs tested](https://orthogonal.info/i-tested-4-free-stock-market-apis-heres-which-one-actually-works-for-side-projects/)
 
 > **Still open**
