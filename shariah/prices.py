@@ -54,3 +54,20 @@ def average_price(ticker: str, days: int = 365) -> dict:
     s = s[s.index >= s.index[-1] - pd.Timedelta(days=days)]
     return {"value": float(s.mean()), "start": s.index[0].strftime("%Y-%m-%d"), "end": s.index[-1].strftime("%Y-%m-%d"),
             "observations": int(len(s))}
+
+
+def ohlc(ticker: str) -> pd.DataFrame:
+    """Daily open/high/low/close/volume for the last 5 years, for candlestick charts.
+    Unadjusted prices in the listing currency (attrs['currency'], e.g. 'GBp' for London)."""
+    def produce():
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=5y&interval=1d"
+        res = requests.get(url, headers=UA, timeout=30).json()["chart"]["result"][0]
+        q = res["indicators"]["quote"][0]
+        return {"date": pd.to_datetime(res["timestamp"], unit="s").strftime("%Y-%m-%d").tolist(),
+                **{k: q[k] for k in ("open", "high", "low", "close", "volume")},
+                "currency": res["meta"].get("currency")}
+    d = cached(f"ohlc_{ticker}", produce)
+    df = pd.DataFrame({k: d[k] for k in ("open", "high", "low", "close", "volume")},
+                      index=pd.to_datetime(d["date"])).dropna()
+    df.attrs["currency"] = d.get("currency")
+    return df

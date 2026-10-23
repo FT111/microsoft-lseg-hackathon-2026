@@ -66,11 +66,19 @@ streamlit run app.py          # opens http://localhost:8501
 
 | Page | What it does |
 |---|---|
-| 🔎 **Check a company** (home) | Search by name or ticker (London listings first). Report: verdict, plain-English reason, each financial ratio vs its limit, business-activity evidence, 5-year price chart, sources & limitations. "AI analyst review" card is a placeholder for Frederick's analyser. |
+| 🔎 **Check a company** (home) | Search by name or ticker (London listings first). Report: verdict, plain-English reason, each financial ratio vs its limit, business-activity evidence, 5-year price chart, sources & limitations. "AI investment committee" card: Shariah gate first, then bull/bear/risk analysts and a Shariah audit. |
 | 📊 **Build my portfolio** | Screens a stock list (UK FTSE 100 sample by default, or US), ranks passes for the investor's risk appetite, allocates (max 10% each), stress-tests 2008/2020/2022, purification. Tabs: Shariah check, Stock picks, Your portfolio, Bad years & charity, Ask the analyst. |
 
-Sidebar: market (UK £ / US $), amount, risk appetite, number of stocks; "More options" has the
-standard (FTSE Shariah / AAOIFI), sukuk share and the stock list.
+No sidebar: everything sits on the page. Under the AMANAT top bar there is a TradingView-style ticker
+tape (watchlist + the market's stock list, each with its last close, daily change and a green/red/amber dot
+for its Shariah status), then the page switch, then a collapsed **⚙️ Settings** expander in three columns:
+Objective (goal - Hajj/Umrah, home, education, wealth, endowment - sets the default horizon and risk
+profile), Market and amount (UK £ / US $, amount, number of holdings, share in Shariah-screened equities;
+the rest is non-interest cash), Screening (FTSE Yasaar or AAOIFI from `shariah/methodology.py`, "Also
+exclude" fossil fuels / mining as a personal value - flagged in reports and left out of the portfolio, never
+a Shariah result -, the AI toggle and the stock list). The company report adds a watchlist star and a
+candlestick + volume chart with 1M-5Y ranges (`prices.ohlc`); the "AI analyst review" placeholder is now the
+four-agent investment committee (`render_committee`, `shariah/agents/`).
 
 ## Where things live
 
