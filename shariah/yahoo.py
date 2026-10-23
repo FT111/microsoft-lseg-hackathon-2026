@@ -70,6 +70,22 @@ def _sum(parts, label):
             "period_end": parts[0]["period_end"], "label": label}
 
 
+def interest_item(inc: dict, rev_end: str, industry: str | None):
+    """Interest income for the revenue period, like-for-like with the revenue figure.
+    Banks report revenue net of interest expense, so for them (industry says 'bank', or gross
+    interest income is larger than revenue) NET interest income is used. Returns (item, note)."""
+    gross = _at(inc, ["Interest Income", "Interest Income Non Operating"], rev_end, "interest income")
+    net = _at(inc, ["Net Interest Income"], rev_end, "net interest income")
+    rev = _at(inc, ["Total Revenue", "Operating Revenue"], rev_end, "revenue")
+    is_bank = "bank" in (industry or "").lower() or (gross and rev and gross["value"] > rev["value"])
+    if is_bank and net and net["value"] >= 0:
+        return net, ("interest income: net interest income (the company reports revenue net of interest expense, "
+                     "so this is the like-for-like share)")
+    if gross and gross["value"] >= 0:
+        return gross, None
+    return None, None
+
+
 def company(symbol: str, today: str | None = None) -> dict:
     """Profile + the numbers the Shariah screens need, in the company's reporting currency."""
     def produce():
@@ -114,10 +130,9 @@ def company(symbol: str, today: str | None = None) -> dict:
     inc_dates = sorted(inc.get("Total Revenue", {}) or inc.get("Operating Revenue", {}), reverse=True)
     rev_end = inc_dates[0] if inc_dates else None
     items["revenue"] = _at(inc, ["Total Revenue", "Operating Revenue"], rev_end, "revenue") if rev_end else None
-    items["interest_income"] = (_at(inc, ["Interest Income", "Interest Income Non Operating"], rev_end, "interest income")
-                                if rev_end else None)
-    if items["interest_income"] and items["interest_income"]["value"] < 0:
-        items["interest_income"] = None
+    items["interest_income"], note = interest_item(inc, rev_end, info.get("industry")) if rev_end else (None, None)
+    if note:
+        out["notes"].append(note)
     dv = _at(cf, ["Cash Dividends Paid", "Common Stock Dividend Paid"], rev_end, "dividends paid") if rev_end else None
     items["dividends_paid"] = {**dv, "value": abs(dv["value"])} if dv else None
     sh = info.get("sharesOutstanding")

@@ -41,3 +41,29 @@ class Footprint(unittest.TestCase):
     def test_no_filing_means_no_pick(self):
         with mock.patch.object(edgar, "submissions", return_value={"latest_10k": None}):
             self.assertEqual(markets.rank(["NOPE"]), [])
+
+
+class YahooInterest(unittest.TestCase):
+    """Yahoo path: banks use net interest income (FICTIONAL rows)."""
+
+    def test_bank_uses_net_interest(self):
+        from shariah import yahoo
+        inc = {"Interest Income": {"2025-12-31": 97.0}, "Net Interest Income": {"2025-12-31": 35.0},
+               "Total Revenue": {"2025-12-31": 71.0}}
+        item, note = yahoo.interest_item(inc, "2025-12-31", "Banks - Diversified")
+        self.assertEqual(item["value"], 35.0)
+        self.assertIn("net interest income", note)
+
+    def test_gross_interest_above_revenue_means_net_revenue(self):
+        from shariah import yahoo
+        inc = {"Interest Income": {"2025-12-31": 97.0}, "Net Interest Income": {"2025-12-31": 35.0},
+               "Total Revenue": {"2025-12-31": 71.0}}
+        self.assertEqual(yahoo.interest_item(inc, "2025-12-31", "Something Else")[0]["value"], 35.0)
+
+    def test_retailer_uses_gross_interest(self):
+        from shariah import yahoo
+        inc = {"Interest Income": {"2026-02-28": 0.23}, "Net Interest Income": {"2026-02-28": -0.56},
+               "Total Revenue": {"2026-02-28": 73.7}}
+        item, note = yahoo.interest_item(inc, "2026-02-28", "Grocery Stores")
+        self.assertEqual(item["value"], 0.23)
+        self.assertIsNone(note)
