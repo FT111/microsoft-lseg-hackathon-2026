@@ -132,40 +132,41 @@ What you say (2 minutes):
 
 Important: Don't show invented ratios as real results. If your prototype does not yet retrieve company data, use a clearly labelled test example and explain that it is a demonstration, not a real screening assessment.
 
-## Slide 5 — The recommendation: where the £100,000 goes
+## Slide 5 — The recommendation: where the $100,000 goes
 
-## Your £100,000 plan — and why
+## Your $100,000 plan — and why
 
-*All figures below come from the live prototype ("Build my portfolio", FTSE Shariah standard, Adventurous profile, data as of 23 Oct 2026). Re-check them on the morning of the demo and update if the app changes.*
+*Figures from the live prototype on main ("Build my portfolio", **Market: US**, FTSE Yasaar standard, Adventurous profile, 23 Oct 2026, 15:36). The UK market currently returns 0 passes, because non-US companies always need a person to confirm the business-activity screen, so demo this slide with the US market. Re-check the numbers just before presenting.*
 
 LEFT — the funnel (big numbers)
 
-# 36 → 13 → 9
+# 32 → 9 → 7
 
-36 FTSE 100 companies checked · 13 pass every FTSE Shariah screen · 21 fail · 2 flagged for a person to check · 9 make the plan
+32 US companies checked · 9 pass every FTSE Yasaar screen · 14 fail · 9 flagged for a person to check · 7 make the plan
 
-RIGHT — where the money goes (pie chart, screenshot from the app)
+RIGHT — where the money goes (screenshot of the app's chart)
 
 | Company | Why it's in | In your plan |
 |---|---|---|
-| Rio Tinto | Passes all screens · score 82/100 · +17% over 1 year | £11,250 |
-| Shell | Passes all screens · score 72/100 · +40% over 1 year | £11,250 |
-| Anglo American | Passes all screens · score 68/100 · +28% over 1 year | £10,000 |
-| BP, Croda, Associated British Foods, Halma, AstraZeneca, Hikma | Pass all screens, ranked next | £11,250 each |
+| Cisco | Passes every screen · score 84/100 · +51% over 1 year | $10,000 |
+| Johnson & Johnson | Passes every screen · score 74/100 · +42% over 1 year | $10,000 |
+| Intel | Passes every screen · score 68/100 · +132% over 1 year | $10,000 |
+| Nvidia, Microsoft, Adobe, Nike | Pass every screen, ranked next | $10,000 each |
+| Cash (no interest) | Never more than 10% in one company, and only 7 qualify | $30,000 |
 
 BOTTOM — three cards
 
-- **Left out on purpose:** Glencore and SSE pass today but sit close to a Shariah limit, so they could have to be sold later → "Watch", not bought.
-- **In a bad year:** a 2008-type crash would take £100,000 to about **£79,900**. (2020: £99,842 · 2022: £101,932.)
-- **Give to charity:** about **£19** of this year's dividends comes from non-compliant income → purification.
+- **Only clean passes are bought:** 9 companies "need a person to check" — we don't guess, so they stay out until reviewed.
+- **In a bad year:** a 2008-type crash would take $100,000 to about **$71,900**.
+- **Give to charity:** about **$5** of this year's dividends comes from non-compliant income → purification.
 
 Footer: Score = momentum + lower volatility + smaller past falls + distance from the Shariah limits. Python does the maths; AI explains it. Educational project — not financial advice, not a fatwa.
 
 What you say (60 seconds):
 
-"So where does Aisha's £100,000 go? We started with 36 FTSE 100 companies. Thirteen pass every FTSE Shariah screen, 21 fail, and two we flag for a person rather than guess. From the thirteen we rank by momentum, risk and — something ordinary screeners ignore — how close each company is to a Shariah limit. Glencore and SSE pass today but sit near a limit, so we watch them instead of buying. The plan holds nine companies, roughly equal amounts, never more than about eleven percent in one. In a 2008-type year this would have fallen to about £79,900 — we show that up front. And about £19 of dividends should go to charity this year. Every one of these numbers is calculated in Python and traceable to its source; the AI only explains them."
+"So where does Aisha's $100,000 go? We checked 32 large US companies. Nine pass every FTSE Yasaar screen, 14 fail, and nine we flag for a person rather than guess. We rank the nine by momentum, risk and how close each one sits to a Shariah limit, and never put more than ten percent in any one company. Seven make the plan at $10,000 each; the other $30,000 stays in non-interest cash until more companies are confirmed. In a 2008-type year this would have fallen to about $71,900 — we show that up front. And about $5 of dividends should go to charity. Every number is calculated in Python and traceable to its source; the AI only explains."
 
-Be ready for: "Isn't this heavy on oil and mining?" — Yes: Shell, BP, Rio Tinto and Anglo American are four of nine. Answer honestly: the screen removes banks and many consumer companies, so what's left tilts to energy and materials; a sector cap is our next improvement.
+Be ready for: "Why hold 30% cash?" — Because we only buy companies that pass every screen and cap each at 10%. Once a reviewer clears the flagged companies, the cash is invested. "Why Intel at +132%?" — Momentum is one of four factors; the AI analyst note lists the risks too.
 
 ## Slide 6 — Market opportunity and competition
 
