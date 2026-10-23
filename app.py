@@ -4,7 +4,7 @@ import streamlit as st
 
 
 st.set_page_config(
-    page_title="Mosaic | Impact portfolio",
+    page_title="Amanat | Impact portfolio",
     page_icon="✦",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -38,58 +38,126 @@ st.markdown(
         padding: 0 4rem 3.5rem;
     }
 
-    .intro-screen {
-        position: fixed;
-        z-index: 1000;
-        inset: 0;
+    .login-screen {
+        min-height: 82vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        overflow: hidden;
-        background: var(--baltic-blue);
-        animation: leave-screen 3.2s cubic-bezier(.77, 0, .18, 1) 1.1s forwards;
-        pointer-events: none;
+        padding: 3rem 0;
     }
 
-    .intro-screen::after {
-        content: "";
-        position: absolute;
-        top: -8%;
-        bottom: -8%;
-        right: -8vw;
-        width: 18vw;
-        opacity: 0;
-        background: linear-gradient(90deg, rgba(5, 102, 141, .95), rgba(235, 242, 250, 0));
-        filter: blur(22px);
-        animation: melt-edge 3.2s cubic-bezier(.77, 0, .18, 1) 1.1s forwards;
+    .login-card {
+        width: min(430px, 100%);
+        padding: 2.35rem;
+        border: 1px solid var(--line);
+        border-radius: 26px;
+        background: rgba(255, 255, 255, .76);
+        box-shadow: 0 24px 60px rgba(35, 72, 99, .1);
+        animation: login-arrive .8s ease-out both;
     }
 
-    .intro-copy {
-        color: var(--alice-blue);
-        font-family: 'Space Grotesk', sans-serif;
-        font-size: clamp(2.3rem, 7vw, 7.5rem);
+    [data-testid="stForm"] {
+        width: min(430px, 100%);
+        margin: 0 auto;
+        padding: 2.35rem;
+        border: 1px solid rgba(5, 102, 141, .14);
+        border-radius: 26px;
+        background: rgba(255, 255, 255, .76);
+        box-shadow: 0 24px 60px rgba(35, 72, 99, .1);
+        animation: login-arrive .8s ease-out both;
+    }
+
+    [data-testid="stForm"] input {
+        border: 1px solid rgba(5, 102, 141, .22);
+        border-radius: 12px;
+        background: var(--alice-blue);
+        color: #000000;
+    }
+
+    [data-testid="stForm"] input:focus {
+        border-color: var(--baltic-blue);
+        box-shadow: 0 0 0 1px var(--baltic-blue);
+    }
+
+    [data-testid="stForm"] label {
+        color: #000000;
+        font-size: .82rem;
         font-weight: 600;
-        letter-spacing: -.07em;
-        line-height: .92;
+    }
+
+    [data-testid="stForm"] .stButton > button {
+        width: 100%;
+        margin-top: .8rem;
+        border-color: var(--rich-cerulean);
+        background: var(--rich-cerulean);
+        color: var(--alice-blue) !important;
+    }
+
+    [data-testid="stForm"] .stButton > button:hover {
+        border-color: var(--baltic-blue);
+        background: var(--baltic-blue);
+        color: var(--alice-blue) !important;
+    }
+
+    [data-testid="stForm"] .stButton > button:active {
+        border-color: #034b68;
+        background: #034b68;
+        color: var(--alice-blue) !important;
+    }
+
+    .login-card .brand {
+        display: block;
+        margin-bottom: 2.8rem;
         text-align: center;
-        animation: intro-copy 3.2s ease-in-out 1.1s forwards;
     }
 
-    @keyframes leave-screen {
-        0%, 62% { transform: translateX(0); opacity: 1; }
-        83% { transform: translateX(-78%); opacity: .92; }
-        100% { transform: translateX(-112%); opacity: 0; }
+    .login-card h1 {
+        margin: 0;
+        color: var(--ink);
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 2.25rem;
+        font-weight: 600;
+        letter-spacing: -.06em;
+        line-height: 1;
+        text-align: center;
     }
 
-    @keyframes melt-edge {
-        0%, 55% { opacity: 0; transform: translateX(0); }
-        74% { opacity: 1; transform: translateX(-4vw); }
-        100% { opacity: 0; transform: translateX(-13vw); }
+    .login-subtitle {
+        margin: .7rem auto 2rem;
+        color: #000000;
+        font-size: .9rem;
+        line-height: 1.5;
+        text-align: center;
     }
 
-    @keyframes intro-copy {
-        0%, 55% { opacity: 1; transform: translateX(0); }
-        100% { opacity: 0; transform: translateX(-7vw); }
+    [data-testid="stForm"] .brand {
+        color: #000000;
+    }
+
+    [data-testid="stForm"] input::placeholder {
+        color: #000000;
+        opacity: .65;
+    }
+
+    .login-hint {
+        margin-top: 1rem;
+        color: #000000;
+        font-size: .72rem;
+        text-align: center;
+    }
+
+    .dashboard-shell {
+        animation: dashboard-arrive 1.15s cubic-bezier(.22, 1, .36, 1) both;
+    }
+
+    @keyframes login-arrive {
+        from { opacity: 0; transform: translateY(18px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes dashboard-arrive {
+        from { opacity: 0; transform: translateY(22px) scale(.988); filter: blur(3px); }
+        to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
     }
 
     .topbar {
@@ -257,15 +325,21 @@ st.markdown(
     .stButton > button {
         border: 1px solid rgba(5, 102, 141, .18);
         border-radius: 999px;
-        background: transparent;
-        color: var(--baltic-blue);
+        background: var(--rich-cerulean);
+        color: var(--alice-blue) !important;
         font-weight: 700;
     }
 
     .stButton > button:hover {
         border-color: var(--baltic-blue);
         background: var(--baltic-blue);
-        color: var(--alice-blue);
+        color: var(--alice-blue) !important;
+    }
+
+    .stButton > button:active {
+        border-color: #034b68;
+        background: #034b68;
+        color: var(--alice-blue) !important;
     }
 
     @media (max-width: 800px) {
@@ -279,20 +353,50 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    with st.form("demo_login"):
+        st.markdown(
+            """
+            <div class="brand" style="display:block; margin-bottom:2.8rem; text-align:center">
+                <span class="brand-mark">✦</span>Amanat
+            </div>
+            <h1 style="margin:0; color:#000000; font-family:'Space Grotesk',sans-serif; font-size:2.25rem; letter-spacing:-.06em; line-height:1; text-align:center">
+                Welcome back
+            </h1>
+            <p class="login-subtitle">Sign in to explore your impact-led portfolio.</p>
+            """,
+            unsafe_allow_html=True,
+        )
+        username = st.text_input("Email", placeholder="you@example.com")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        submitted = st.form_submit_button("Sign in", use_container_width=True)
+        if submitted:
+            if username == "demo@amanat.app" and password == "amanat":
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("That demo login was not recognised.")
+        st.markdown(
+            '<div class="login-hint">Demo access · demo@amanat.app / amanat</div>',
+            unsafe_allow_html=True,
+        )
+    st.stop()
+
 st.markdown(
     """
-    <div class="intro-screen" aria-label="Intro">
-        <div class="intro-copy">INSERT TEMPLATE here</div>
-    </div>
-    <div class="topbar">
-        <div class="brand"><span class="brand-mark">✦</span>mosaic</div>
-        <div class="topbar-note">Emerging markets · impact-led research</div>
-    </div>
-    <div class="hero">
-        <div class="eyebrow">Your portfolio, with purpose</div>
-        <h1>Grow capital where progress is happening.</h1>
-        <p>A considered view of your investments today, and the opportunities worth watching next.</p>
-    </div>
+    <div class="dashboard-shell">
+        <div class="topbar">
+            <div class="brand"><span class="brand-mark">✦</span>Amanat</div>
+            <div class="topbar-note">Emerging markets · impact-led research</div>
+        </div>
+        <div class="hero">
+            <div class="eyebrow">Your portfolio, with purpose</div>
+            <h1>Grow capital where progress is happening.</h1>
+            <p>A considered view of your investments today, and the opportunities worth watching next.</p>
+        </div>
     """,
     unsafe_allow_html=True,
 )
@@ -379,3 +483,4 @@ for column, (name, meta, score, confidence) in zip(future_columns, future_invest
 
 st.markdown("<div style='height:.7rem'></div>", unsafe_allow_html=True)
 st.button("Explore all opportunities  →", use_container_width=False)
+st.markdown("</div>", unsafe_allow_html=True)
