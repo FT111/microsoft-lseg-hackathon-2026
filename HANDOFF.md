@@ -38,8 +38,15 @@ streamlit run app.py          # opens http://localhost:8501
 | 🔎 **Check a company** (home) | Search by name or ticker (London listings first). Report: verdict, plain-English reason, each financial ratio vs its limit, business-activity evidence, 5-year price chart, sources & limitations. "AI analyst review" card is a placeholder for Frederick's analyser. |
 | 📊 **Build my portfolio** | Screens a stock list (UK FTSE 100 sample by default, or US), ranks passes for the investor's risk appetite, allocates (max 10% each), stress-tests 2008/2020/2022, purification. Tabs: Shariah check, Stock picks, Your portfolio, Bad years & charity, Ask the analyst. |
 
-Sidebar: market (UK £ / US $), amount, risk appetite, number of stocks; "More options" has the
-standard (FTSE Shariah / AAOIFI), sukuk share and the stock list.
+Sidebar = the investor's personal **Amanah card** (gradient card with Islamic geometric pattern):
+greeting by name, their intention (Hajj/Umrah, halal home, children's education, grow wealth, charity
+legacy - sets horizon, suggested risk and the portfolio headline), amount entrusted, a zakat estimate
+(2.5% x ~25% zakatable-assets proxy - an estimate, "ask your scholar"). Questions below it:
+1 · Your intention (name, goal, years) · 2 · Your amanah (market UK £ / US $, amount, risk asked as
+"if a bad year turned £100,000 into £75,000 you would sell / wait / buy more") · 3 · Your values
+(FTSE Shariah or AAOIFI, plus "also avoid" fossil fuels / mining - flagged in reports, left out of
+the portfolio). "Recently checked" lists searched companies with their verdict; click to reopen.
+"More options" has number of stocks, sukuk share, AI toggle and the stock list.
 
 ## Where things live
 

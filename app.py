@@ -6,6 +6,8 @@ import json
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from shariah import edgar, llm, portfolio, prices, screen, signals, yahoo
@@ -23,6 +25,20 @@ STATUS_LABEL = {"PASS": "✅ Pass", "FAIL": "❌ Fail", "REVIEW": "🔎 Needs re
 STATUS_CLASS = {"PASS": "pass", "FAIL": "fail", "REVIEW": "review"}
 MARKETS = {"UK · London Stock Exchange": {"cur": "£", "universe": UK_UNIVERSE, "label": "UK (FTSE 100)"},
            "US · New York": {"cur": "$", "universe": UNIVERSE, "label": "US"}}
+# The investment objective sets the default horizon (years) and suggested risk profile.
+GOALS = {"Hajj or Umrah": (3, "Cautious"), "Home purchase": (5, "Cautious"), "Education": (10, "Balanced"),
+         "Wealth growth": (15, "Adventurous"), "Charitable endowment": (20, "Balanced")}
+RISKS = ["Cautious", "Balanced", "Adventurous"]
+STRICTNESS = {"FTSE Shariah · LSEG's index rules": "FTSE Shariah (Yasaar)", "AAOIFI · Islamic finance standard": "AAOIFI"}
+# Personal values on top of the Shariah screen, matched against the company's industry.
+VALUES = {"🛢️ Fossil fuels": ("oil", "gas", "coal", "petroleum", "crude"),
+          "⛏️ Mining": ("mining", "metals", "gold", "silver", "copper", "aluminum")}
+# TradingView-style colours for up/down, and the default watchlist per market.
+UP, DOWN = "#089981", "#F23645"
+DOT = {"PASS": "🟢", "FAIL": "🔴", "REVIEW": "🟡"}
+WATCH = {"UK · London Stock Exchange": ["AZN.L", "TSCO.L", "ULVR.L", "REL.L", "RMV.L", "BP.L", "HSBA.L", "DGE.L"],
+         "US · New York": ["AAPL", "MSFT", "NVDA", "COST", "JPM", "KO"]}
+RANGES = {"1M": 31, "3M": 92, "6M": 183, "1Y": 366, "5Y": 1830}
 POPULAR = {"UK · London Stock Exchange": ["Tesco", "AstraZeneca", "Unilever", "HSBC", "Diageo", "BP", "Rightmove"],
            "US · New York": ["Apple", "Microsoft", "Nvidia", "JPMorgan", "Coca-Cola", "Tesla"]}
 
@@ -36,8 +52,6 @@ html, body, [data-testid="stAppViewContainer"] {background:var(--alice); color:v
 .block-container {padding-top:1rem; max-width:1240px;}
 h1, h2, h3 {font-family:'Space Grotesk',sans-serif !important; letter-spacing:-.04em; color:var(--ink);}
 
-[data-testid="stSidebar"] {background:#ffffff; border-right:1px solid var(--line);}
-[data-testid="stSidebar"] h2 {font-size:1.15rem;}
 
 .topbar {display:flex; align-items:center; justify-content:space-between; padding:.6rem 0 0;}
 .brand {color:var(--baltic); font-family:'Space Grotesk',sans-serif; font-size:1.25rem; font-weight:700; letter-spacing:-.04em;}
@@ -106,6 +120,23 @@ h1, h2, h3 {font-family:'Space Grotesk',sans-serif !important; letter-spacing:-.
 .stButton > button {border:1px solid rgba(5,102,141,.18); border-radius:999px; background:var(--cerulean); color:var(--alice) !important; font-weight:700;}
 .stButton > button:hover {border-color:var(--baltic); background:var(--baltic);}
 [data-testid="stDataFrame"] {border-radius:14px; overflow:hidden;}
+.step {margin:1.1rem 0 .2rem; color:var(--cerulean); font-size:.7rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase;}
+
+/* TradingView-style ticker tape */
+.tape {overflow:hidden; margin:.7rem 0 .2rem; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+       background:rgba(255,255,255,.6); white-space:nowrap; -webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);}
+.tape-track {display:inline-block; padding:.45rem 0; animation:tape 55s linear infinite;}
+.tape:hover .tape-track {animation-play-state:paused;}
+.tk {display:inline-block; margin:0 1.4rem; font-size:.82rem; font-variant-numeric:tabular-nums;}
+.tk b {margin-right:.35rem;} .up {color:#089981;} .down {color:#F23645;}
+@keyframes tape {from {transform:translateX(0);} to {transform:translateX(-50%);}}
+
+/* TradingView-style chart header */
+.px-head {display:flex; align-items:baseline; gap:.7rem; flex-wrap:wrap;}
+.px-big {font-family:'Space Grotesk',sans-serif; font-size:2rem; font-weight:600; letter-spacing:-.04em; font-variant-numeric:tabular-nums;}
+.px-cur {color:var(--muted); font-size:.8rem;}
+.px-chg {font-weight:700; font-variant-numeric:tabular-nums;}
+.values-note {margin-top:.5rem; color:var(--muted); font-size:.85rem;}
 .disclaimer {margin-top:2.5rem; color:var(--muted); font-size:.75rem; text-align:center;}
 </style>""", unsafe_allow_html=True)
 
@@ -133,25 +164,48 @@ def big_money(cur: str, x: float) -> str:
     return f"{cur}{x:,.0f}"
 
 
-# ---------------- sidebar: the client ----------------
-with st.sidebar:
-    st.markdown('<div class="brand"><span class="brand-mark" aria-hidden="true"></span>Your plan</div>', unsafe_allow_html=True)
-    st.caption("Tell us about you - everything on the page updates as you change these.")
-    market = st.radio("Market", list(MARKETS), help="Search covers any listed company; this sets the "
-                      "portfolio's stock list and currency.")
-    C = MARKETS[market]["cur"]
-    amount = st.number_input(f"How much are you investing? ({C})", 1_000, 10_000_000, 100_000, step=5_000)
-    risk = st.radio("How much ups and downs can you live with?", list(signals.PROFILES), index=1, horizontal=True,
-                    help="Cautious favours steadier stocks; Adventurous favours stronger recent momentum.")
-    top_n = st.slider("How many stocks to hold", 3, 20, 10)
-    with st.expander("More options"):
-        standard = st.radio("Shariah screening standard", list(screen.STANDARDS),
-                            help="FTSE measures ratios against total assets; AAOIFI against market value.")
-        eq = st.slider("Share in Shariah stocks", 0.5, 1.0, 1.0, 0.05)
+# ---------------- header + the client (no sidebar: everything sits on the page) ----------------
+st.markdown("""<div class="topbar"><div class="brand word"><span class="brand-mark" aria-hidden="true"></span>AMANAT</div>
+<div class="topbar-note">Educational project · Not financial advice · Not a fatwa</div></div>""", unsafe_allow_html=True)
+
+tape_slot = st.container()  # TradingView-style ticker tape, filled once screening is defined
+page = st.segmented_control("Page", ["🔎 Check a company", "📊 Build my portfolio"], default="🔎 Check a company",
+                            key="page", label_visibility="collapsed") or "🔎 Check a company"
+
+with st.expander("⚙️ Settings · market, amount, risk profile, Shariah standard"):
+    col_obj, col_mkt, col_scr = st.columns(3, gap="large")
+    with col_obj:
+        st.markdown('<div class="step">Objective</div>', unsafe_allow_html=True)
+        goal = st.selectbox("Investment objective", list(GOALS), index=3, key="goal")
+        years, suggested = GOALS[goal]
+        years = st.slider("Time horizon (years)", 1, 30, years, key=f"years_{goal}")
+        risk = st.radio("Risk profile", RISKS, index=RISKS.index(suggested), key=f"risk_{goal}", horizontal=True,
+                        help=f"Suggested for {goal.lower()}: {suggested}.")
+    with col_mkt:
+        st.markdown('<div class="step">Market and amount</div>', unsafe_allow_html=True)
+        market = st.radio("Market", list(MARKETS), help="Search covers any listed company; this sets the "
+                          "portfolio's stock list and currency.")
+        C = MARKETS[market]["cur"]
+        amount = st.number_input(f"Amount to invest ({C})", 1_000, 10_000_000, 100_000, step=5_000)
+        top_n = st.slider("Number of holdings", 3, 20, 10)
+        eq = st.slider("Allocation to Shariah equities", 0.5, 1.0, 1.0, 0.05)
         sk = st.slider("Sukuk (Islamic bonds)", 0.0, 1.0 - eq, 0.0, 0.05) if eq < 1.0 else 0.0
+    with col_scr:
+        st.markdown('<div class="step">Screening</div>', unsafe_allow_html=True)
+        standard = STRICTNESS[st.radio("Shariah standard", list(STRICTNESS),
+                                       help="FTSE measures ratios against total assets; AAOIFI against market value.")]
+        avoid = st.pills("Also exclude", list(VALUES), selection_mode="multi", key="avoid") or []
         use_llm = st.toggle("Use AI to read US annual reports (10-Ks)", value=llm.available(), disabled=not llm.available(),
                             help="Needs OPENAI_API_KEY in .env. Without it, a rule on the SEC industry code is used.")
         tickers = st.multiselect("Stocks to consider", MARKETS[market]["universe"], default=MARKETS[market]["universe"])
+
+
+def against_values(r: dict) -> list[str]:
+    """Which of the investor's own 'also avoid' values this company's industry hits."""
+    industry = (r.get("sic") or "").lower()
+    return [v for v in avoid if any(w in industry for w in VALUES[v])]
+
+
 rules = screen.STANDARDS[standard]
 
 
@@ -194,11 +248,39 @@ def screen_one(t: str, std: str, use_ai: bool):
             "source": "SEC EDGAR", "profile": {"industry": sub["sicDescription"], "exchange": "US"}, "currency": "USD"}
 
 
-# ---------------- header + page switch ----------------
-st.markdown("""<div class="topbar"><div class="brand word"><span class="brand-mark" aria-hidden="true"></span>AMANAT</div>
-<div class="topbar-note">Educational project · Not financial advice · Not a fatwa</div></div>""", unsafe_allow_html=True)
-page = st.segmented_control("Page", ["🔎 Check a company", "📊 Build my portfolio"], default="🔎 Check a company",
-                            key="page", label_visibility="collapsed") or "🔎 Check a company"
+@st.cache_data(show_spinner=False, ttl=900)
+def quote(t: str):
+    """Last close and change on the day before, from cached daily prices."""
+    h = prices.history(t)
+    return float(h.iloc[-1]), float(h.iloc[-1] / h.iloc[-2] - 1), str(h.index[-1].date())
+
+
+def status_of(t: str):
+    try:
+        return screen_one(t, standard, use_llm)["verdict"]["status"]
+    except Exception:
+        return None
+
+
+def toggle_watch(symbol: str) -> None:
+    wl = st.session_state.setdefault(f"watch_{market}", list(WATCH[market]))
+    wl.remove(symbol) if symbol in wl else wl.append(symbol)
+
+
+watchlist = st.session_state.setdefault(f"watch_{market}", list(WATCH[market]))
+
+
+# ---------------- ticker tape (drawn in its slot under the header) ----------------
+tape = []
+for t in dict.fromkeys(watchlist + MARKETS[market]["universe"][:14]):
+    try:
+        last, chg, _ = quote(t)
+    except Exception:
+        continue
+    tape.append(f'<span class="tk">{DOT.get(status_of(t), "")} <b>{t.removesuffix(".L")}</b>{last:,.2f} '
+                f'<span class="{"up" if chg >= 0 else "down"}">{"▲" if chg >= 0 else "▼"} {abs(chg):.2%}</span></span>')
+if tape:
+    tape_slot.markdown(f'<div class="tape"><div class="tape-track">{"".join(tape) * 2}</div></div>', unsafe_allow_html=True)
 
 
 # ================= page 1: check any company =================
@@ -218,6 +300,7 @@ def company_report(symbol: str, exchange: str) -> None:
     with st.spinner(f"Checking {symbol}..."):
         r = screen_one(symbol, standard, use_llm)
     fin, v, b, p = r["fin"], r["verdict"], r["business"], r["profile"]
+    clashes = against_values(r)
     base = v["ratios"].get(rules["denominator"]) or {}
     cur = r["currency"] or ""
     why = {"PASS": f"Passes every {html.escape(standard)} screen we can check.",
@@ -230,7 +313,13 @@ def company_report(symbol: str, exchange: str) -> None:
         st.markdown(f'<div class="report-head"><div><div class="label">Shariah screen · {html.escape(standard)}</div>'
                     f'<div class="report-name">{html.escape(fin["name"])}</div><div class="meta">{meta}</div></div>'
                     f'<div class="verdict {STATUS_CLASS[v["status"]]}">{STATUS_LABEL[v["status"]]}</div></div>'
-                    f'<div class="why">{why}</div>', unsafe_allow_html=True)
+                    f'<div class="why">{why}</div>'
+                    + (f'<div class="values-note">Heads up: you asked to also avoid '
+                       f'{html.escape(", ".join(c.split(" ", 1)[1].lower() for c in clashes))} - this company is in '
+                       f'{html.escape(p.get("industry") or "")}.</div>' if clashes else ""), unsafe_allow_html=True)
+        starred = symbol in st.session_state.get(f"watch_{market}", WATCH[market])
+        st.button("★ In your watchlist" if starred else "☆ Add to watchlist", key=f"star_{symbol}",
+                  on_click=toggle_watch, args=(symbol,))
 
     left, right = st.columns([1.15, 1], gap="large")
     with left, st.container(key="panel_ratios"):
@@ -260,16 +349,34 @@ def company_report(symbol: str, exchange: str) -> None:
                 st.write(p["longBusinessSummary"])
 
     try:
-        hist = prices.history(symbol)
-        hist = hist[hist.index >= hist.index[-1] - pd.Timedelta(days=5 * 365)]
-        with st.container(key="panel_price"):
-            st.markdown('<div class="label">Share price · last 5 years</div>', unsafe_allow_html=True)
-            fig = px.area(hist.rename("price").reset_index(), x="index", y="price", labels={"index": "", "price": ""},
-                          color_discrete_sequence=[BLUES[0]])
-            fig.update_traces(line_width=2, fillcolor="rgba(5,102,141,.08)")
-            st.plotly_chart(styled(fig, 220), width="stretch")
+        o = prices.ohlc(symbol)
     except Exception:
-        pass
+        o = None
+    if o is not None and len(o) > 2:
+        with st.container(key="panel_price"):
+            listed = o.attrs.get("currency") or ""
+            last, prev = o["close"].iloc[-1], o["close"].iloc[-2]
+            day = last / prev - 1
+            head, pick = st.columns([3, 2], vertical_alignment="center")
+            rng = pick.segmented_control("Range", list(RANGES), default="1Y", key=f"rng_{symbol}",
+                                         label_visibility="collapsed") or "1Y"
+            d = o[o.index >= o.index[-1] - pd.Timedelta(days=RANGES[rng])]
+            span = d["close"].iloc[-1] / d["close"].iloc[0] - 1
+            head.markdown(f'<div class="px-head"><span class="px-big">{last:,.2f}</span><span class="px-cur">{html.escape(listed)}</span>'
+                          f'<span class="px-chg {"up" if day >= 0 else "down"}">{last - prev:+,.2f} ({day:+.2%}) today</span>'
+                          f'<span class="px-cur">{span:+.1%} over {rng} · close {o.index[-1]:%d %b %Y}</span></div>',
+                          unsafe_allow_html=True)
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[.78, .22], vertical_spacing=.03)
+            fig.add_trace(go.Candlestick(x=d.index, open=d["open"], high=d["high"], low=d["low"], close=d["close"],
+                                         increasing=dict(line_color=UP, fillcolor=UP), decreasing=dict(line_color=DOWN, fillcolor=DOWN),
+                                         name=symbol, showlegend=False), row=1, col=1)
+            fig.add_trace(go.Bar(x=d.index, y=d["volume"], marker_color=[UP if c >= o_ else DOWN for o_, c in zip(d["open"], d["close"])],
+                                 opacity=.45, name="Volume", showlegend=False), row=2, col=1)
+            fig.update_layout(xaxis_rangeslider_visible=False, hovermode="x unified")
+            fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])], showgrid=False)
+            fig.update_yaxes(side="right", gridcolor="rgba(5,102,141,.07)")
+            fig.update_yaxes(showticklabels=False, showgrid=False, row=2, col=1)
+            st.plotly_chart(styled(fig, 380), width="stretch", config={"displayModeBar": False})
 
     with st.container(key="panel_ai"):
         st.markdown('<div class="label">AI analyst review</div>', unsafe_allow_html=True)
@@ -337,6 +444,8 @@ else:
 
     counts = {s: sum(r["verdict"]["status"] == s for r in results.values()) for s in STATUS_LABEL}
     passing = [t for t, r in results.items() if r["verdict"]["status"] == "PASS"]
+    removed = [t for t in passing if against_values(results[t])]
+    passing = [t for t in passing if t not in removed]
     ranking = signals.rank({t: results[t] for t in passing}, rules, signals.PROFILES[risk]) if passing else pd.DataFrame()
     picks = [] if ranking.empty else ranking[~ranking["signal"].str.startswith("Watch - near")]["ticker"].head(top_n).tolist()
 
@@ -350,10 +459,10 @@ else:
         except Exception as e:
             errors.append(f"stress test / purification: {e}")
 
-    st.markdown(f"""<div class="hero"><div class="eyebrow">Your plan, screened for Shariah</div>
-<h1>Halal investing, explained.</h1>
+    st.markdown(f"""<div class="hero"><div class="eyebrow">Portfolio · {html.escape(goal)} · {years}-year horizon</div>
+<h1>Shariah-screened portfolio</h1>
 <p>We check {len(results)} {MARKETS[market]["label"]} companies against the {html.escape(standard)} rules, rank the ones that
-pass for a <b>{risk.lower()}</b> investor, and show what that means for your {C}{amount:,.0f} - with the evidence behind
+pass for a <b>{risk.lower()}</b> risk profile, and show what that means for {C}{amount:,.0f} - with the evidence behind
 every verdict.</p></div>""", unsafe_allow_html=True)
 
     heading("Your plan at a glance", f"{standard} standard · {risk} profile")
@@ -361,7 +470,8 @@ every verdict.</p></div>""", unsafe_allow_html=True)
     cards = [
         card("Invested", f"{C}{amount:,.0f}", f"{eq:.0%} Shariah stocks" + (f" · {sk:.0%} sukuk" if sk else "")),
         card("Companies that pass", f"{counts['PASS']} of {len(results)}",
-             f"{counts['FAIL']} fail · {counts['REVIEW']} need a person to check"),
+             f"{counts['FAIL']} fail · {counts['REVIEW']} need a person to check"
+             + (f" · {len(removed)} left out for your values" if removed else "")),
         card("Stocks in your plan", str(len(picks or passing)), "Top-ranked, max 10% in any one"),
         card(f"In a bad year ({int(worst['year'])})" if worst is not None else "In a bad year",
              f"{C}{worst['value_after']:,.0f}" if worst is not None else "-",
