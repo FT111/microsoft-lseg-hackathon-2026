@@ -6,4 +6,7 @@ dependencies = [
     "openai>=3.37.0",
     "python-dotenv>=1.2.4",
     "streamlit>=1.66.1",
+    "pandas",
+    "plotly",
+    "requests",
 ]
