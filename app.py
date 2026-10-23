@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 
-from shariah import llm, pipeline, portfolio, prices, signals, yahoo
+from shariah import llm, markets, pipeline, portfolio, prices, signals, yahoo
 from shariah.agents import committee, shariah_checker
 from shariah.methodology import FAIL, METHODOLOGIES, NEEDS_REVIEW, PASS, STANDARDS
 from shariah.universe import UK_UNIVERSE, UNIVERSE
@@ -601,216 +601,69 @@ else:
 that pass every screen for a <b>{risk.lower()}</b> risk profile, and show what that means for {C}{amount:,.0f} - with the
 evidence behind every result.</p></div>""", unsafe_allow_html=True)
 
-    heading("Your plan at a glance", f"{standard} standard · {risk} profile")
-    worst = stt.loc[stt["portfolio_return"].idxmin()] if stt is not None and not stt.empty else None
-    to_purify = pur["to_purify"].dropna().sum() if pur is not None and not pur.empty else 0.0
-    unknown_purify = int(pur["to_purify"].isna().sum()) if pur is not None and not pur.empty else 0
-    cards = [
-        card("Invested", f"{C}{amount:,.0f}", f"{eq:.0%} Shariah-screened stocks" + (f" · {1 - eq:.0%} non-interest cash" if eq < 1 else "")),
-        card("Pass every screen", f"{counts[PASS]} of {len(results)}",
-             f"{counts[FAIL]} fail · {counts[NEEDS_REVIEW]} need a person to check"
-             + (f" · {len(removed)} left out for your values" if removed else "")),
-        card("Stocks in your plan", str(len(holdings)), "Only passing stocks · max 10% in any one"),
-        card(f"In a bad year ({int(worst['year'])})" if worst is not None else "In a bad year",
-             f"{C}{worst['value_after']:,.0f}" if worst is not None else "-",
-             f"{worst['gain_or_loss']:+,.0f} vs today" if worst is not None else "Not enough price history",
-             "bad" if worst is not None and worst["gain_or_loss"] < 0 else ""),
-        card("Give to charity this year", f"{C}{to_purify:,.2f}",
-             "Purification" + (f" · {unknown_purify} holding(s) unknown" if unknown_purify else "")),
-    ]
-    st.markdown(f'<div class="stats five">{"".join(cards)}</div>', unsafe_allow_html=True)
-
-    if alloc is not None:
-        heading("Where your money goes", "Calmer stocks get more")
-        left, right = st.columns([1, 1.2], gap="large")
-        with left, st.container(key="panel_donut"):
-            st.markdown(f'<div class="label">Portfolio value</div><div class="big">{C}{amount:,.0f}</div>', unsafe_allow_html=True)
-            names = {r["ticker"]: r["company"] for _, r in ranking.iterrows()} if not ranking.empty else {}
-            donut = alloc.assign(label=alloc["holding"].map(lambda h: names.get(h, h)))
-            fig = px.pie(donut, names="label", values="amount", hole=.62, color_discrete_sequence=BLUES)
-            fig.update_traces(textinfo="none", hovertemplate=f"%{{label}}<br>{C}%{{value:,.0f}} (%{{percent}})<extra></extra>")
-            fig.update_layout(legend=dict(orientation="h", y=-0.05, x=0.5, xanchor="center", yanchor="top"))
-            st.plotly_chart(styled(fig, 460), width="stretch")
-        with right, st.container(key="panel_top"):
-            st.markdown(f'<div class="label">Top picks for a {risk.lower()} investor</div>', unsafe_allow_html=True)
-            rows = []
-            for _, r in ranking.head(5).iterrows():
-                share = alloc.set_index("holding")["amount"].get(r["ticker"])
-                rows.append(f'<div class="row"><div><div class="name">{html.escape(r["company"])}</div>'
-                            f'<div class="meta">{r["ticker"]} · {r["return_1y"]:+.0%} over the past year'
-                            + (f" · {C}{share:,.0f} in your plan" if share else "") + '</div>'
-                            f'<span class="tag{" warn" if r["signal"].startswith("Watch - near") else ""}">{r["signal"]}</span></div>'
-                            f'<div class="score">{r["score"]:.0f}/100</div></div>')
-            st.markdown("".join(rows) or '<div class="sub">No passing stocks to rank yet.</div>', unsafe_allow_html=True)
-    elif not passing:
+    if alloc is None:
         st.info("No company in this list passes every screen of this standard, so there is nothing to invest in yet. "
-                "Non-US companies always need a person to confirm the business-activity screen.")
-
-    # ---------------- details ----------------
-    money = st.column_config.NumberColumn  # £ has no built-in format, so label the currency in the header
-    money_fmt = "dollar" if C == "$" else "localized"
-    heading("Explore the details", "Every number can be traced to its source")
-    tab_screen, tab_picks, tab_alloc, tab_stress, tab_ask, tab_method = st.tabs(
-        ["Shariah check", "Stock picks", "Your portfolio", "Bad years & charity", "Ask the analyst", "Methodology"])
-
-    def cell(v, key):
-        s = next((x for x in v["screens"] if x["key"] == key), None)
-        return "n/a" if s is None else f"{STATUS_ICON[s['status']]} {pct(s['value'])}"
-
-    with tab_screen:
-        rows = []
-        for t, r in results.items():
-            v, b = r["verdict"], r["business"]
-            row = {"Ticker": t, "Company": r["fin"]["name"], "Result": STATUS_LABEL[v["status"]], "Activities": cell(v, "activity")}
-            for rule in meth["ratios"]:
-                row[rule["label"]] = cell(v, rule["key"])
-            row["Interest + non-compliant income"] = cell(v, "noncompliant_income")
-            row["Why"] = "; ".join(v["reasons"] + v["review"]) or "meets every screen"
-            row["Evidence"] = b.get("evidence", "")
-            row["Data"] = r["source"]
-            rows.append(row)
-        df = pd.DataFrame(rows)
-        show = st.segmented_control("Show", ["All"] + list(STATUS_LABEL.values()), default="All", key="screen_filter")
-        if show and show != "All" and not df.empty:
-            df = df[df["Result"] == show]
-        st.dataframe(df, width="stretch", hide_index=True)
-        st.caption(f"Standard: {meth['source']}. US companies: SEC EDGAR filings. UK companies: Yahoo Finance's copy of the "
-                   "accounts. \"Needs review\" means a rule could not be checked with the data available - we flag it rather than guess.")
-        if results:
-            with st.container(key="panel_company"):
-                st.markdown('<div class="label">Look closer at one company</div>', unsafe_allow_html=True)
-                order = sorted(results, key=lambda t: (statuses[t] != PASS, statuses[t] != NEEDS_REVIEW, t))
-                cpick = st.selectbox("Company", order, key="committee_pick",
-                                     format_func=lambda t: f"{t} · {results[t]['fin']['name']} · {statuses[t]}")
-                r = results[cpick]
-                pos = alloc.set_index("holding").loc[cpick].to_dict() if alloc is not None and cpick in set(alloc["holding"]) else None
-                rr = ranking.set_index("ticker").loc[cpick].to_dict() if not ranking.empty and cpick in set(ranking["ticker"]) else None
-                render_committee(r, key=f"portfolio_{cpick}", position=pos, rank_row=rr,
-                                 stress=stt.to_dict("records") if stt is not None else None)
+                "Non-US companies always need a person to confirm the business-activity screen - try the US market.")
         if errors:
             with st.expander(f"{len(errors)} items could not be loaded"):
                 st.write(errors)
+    else:
+        names = {r["ticker"]: r["company"] for _, r in ranking.iterrows()}
 
-    with tab_picks:
-        if ranking.empty:
-            st.info("No stock passes every screen of this standard, so there is nothing to rank.")
-        else:
-            st.plotly_chart(styled(px.bar(ranking, x="ticker", y="score", color="signal",
-                                          color_discrete_map=SIGNAL_COLOURS,
-                                          labels={"ticker": "", "score": "Score (0-100)"})), width="stretch")
-            show = ranking[["ticker", "company", "signal", "score", "price", "return_1y", "momentum_12_1",
-                            "volatility", "max_drawdown_1y", "headroom"]]
-            st.dataframe(show, width="stretch", hide_index=True, column_config={
-                "ticker": "Ticker", "company": "Company", "signal": "Signal",
-                "score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f"),
-                "price": money("Price" if C == "$" else "Price (pence)", format="dollar" if C == "$" else "%.1f"),
-                "return_1y": st.column_config.NumberColumn("1-year return", format="percent"),
-                "momentum_12_1": st.column_config.NumberColumn("Momentum", format="percent"),
-                "volatility": st.column_config.NumberColumn("Volatility", format="percent"),
-                "max_drawdown_1y": st.column_config.NumberColumn("Worst fall (1y)", format="percent"),
-                "headroom": st.column_config.NumberColumn("Room below Shariah limit", format="percent")})
-            st.caption("Only stocks that pass every screen are ranked. Score = momentum + steadiness + smaller falls + room "
-                       "below the Shariah limits, weighted for your risk appetite. A stock close to a limit may have to be "
-                       "sold if it breaches it. This ranks candidates; it does not predict prices.")
+        # ---- 1. the portfolio ----
+        heading("1 · Your portfolio", f"{C}{amount:,.0f} · {len(holdings)} stocks · max 10% in any one")
+        with st.container(key="panel_donut"):
+            donut = alloc.assign(label=alloc["holding"].map(lambda h: names.get(h, "Non-interest cash" if h == "CASH" else h)))
+            fig = px.pie(donut, names="label", values="amount", hole=.55, color_discrete_sequence=BLUES)
+            fig.update_traces(textinfo="percent+label", textposition="inside", insidetextorientation="radial",
+                              hovertemplate=f"%{{label}}<br>{C}%{{value:,.0f}} (%{{percent}})<extra></extra>")
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(styled(fig, 520), width="stretch")
+            st.caption("Every holding passed every screen of the selected standard. Calmer stocks get a larger share "
+                       "(inverse volatility), capped at 10% each; any remainder is non-interest-bearing cash. "
+                       "Deterministic maths - the AI does not choose the numbers.")
 
-    with tab_alloc:
-        if alloc is None:
-            st.info("No stocks pass every screen yet.")
-        else:
-            st.plotly_chart(styled(px.sunburst(alloc, path=["sleeve", "holding"], values="amount",
-                                               color_discrete_sequence=BLUES), 420), width="stretch")
-            st.dataframe(alloc, width="stretch", hide_index=True, column_order=["holding", "sleeve", "weight", "amount"],
-                         column_config={"holding": "Holding", "sleeve": "Type",
-                                        "weight": st.column_config.NumberColumn("Share", format="percent"),
-                                        "amount": money(f"Amount ({C})", format=money_fmt)})
-            st.caption("Every holding passed every screen of the selected standard - the portfolio code refuses anything "
-                       "else. Inverse-volatility weights (calmer stocks get more), max 10% each; any remainder is "
-                       "non-interest-bearing cash. Deterministic maths - the AI does not choose the numbers.")
+        # ---- 2. the ten picks ----
+        heading("2 · Ten recommended picks", f"{risk} profile · ranked by momentum, steadiness and Shariah headroom")
+        with st.container(key="panel_top"):
+            rows = []
+            for i, (_, r) in enumerate(ranking.head(10).iterrows(), 1):
+                share = alloc.set_index("holding")["amount"].get(r["ticker"])
+                rows.append(f'<div class="row"><div><div class="name">{i}. {html.escape(r["company"])}</div>'
+                            f'<div class="meta">{r["ticker"]} · {r["return_1y"]:+.0%} over the past year · '
+                            f'{r["headroom"]:.0%} room below the nearest Shariah limit'
+                            + (f" · {C}{share:,.0f} in your plan" if share else " · not in your plan") + '</div>'
+                            f'<span class="tag{" warn" if r["signal"].startswith("Watch - near") else ""}">{r["signal"]}</span></div>'
+                            f'<div class="score">{r["score"]:.0f}/100</div></div>')
+            st.markdown("".join(rows), unsafe_allow_html=True)
+            st.caption("Only stocks that pass every screen are ranked. This ranks candidates for holding; it does not "
+                       "predict prices. Open any company on the Check a company page for the evidence and the committee.")
 
-    with tab_stress:
-        if stt is None:
-            st.info("Build a portfolio first.")
-        else:
-            st.subheader(f"What past years would have done to your {C}{amount:,.0f}")
-            year_cards = [card(str(int(y["year"])), f"{C}{y['value_after']:,.0f}",
-                               f"{y['gain_or_loss']:+,.0f} ({y['portfolio_return']:+.0%})"
-                               + (f"<br>No data for {html.escape(y['no_data_for'])}" if y["no_data_for"] else ""),
-                               "good" if y["gain_or_loss"] >= 0 else "bad") for _, y in stt.iterrows()]
-            st.markdown(f'<div class="stats">{"".join(year_cards)}</div>', unsafe_allow_html=True)
-            st.caption("2008: financial crisis · 2020: Covid crash and recovery · 2022: rate-rise sell-off. "
-                       "Holdings that didn't exist yet count as 0%.")
-            st.subheader("Purification - the share to give to charity")
-            st.caption(f"{standard} method ({meth['purification']['clause']}): {meth['purification']['text']}")
-            if pur is not None and not pur.empty:
-                st.dataframe(pur, width="stretch", hide_index=True, column_config={
-                    "holding": "Holding",
-                    "dividend_yield": st.column_config.NumberColumn("Dividend yield", format="percent"),
-                    "dividend_received": money(f"Dividends you'd receive ({C})", format=money_fmt),
-                    "noncompliant_share": st.column_config.NumberColumn("Non-compliant income", format="percent"),
-                    "to_purify": money(f"To donate ({C})", format=money_fmt), "method": "How"})
-                if unknown_purify:
-                    st.caption("Blank 'To donate' means the non-compliant income share is unknown - it is not guessed.")
+        # ---- 3. presence in Muslim-majority markets ----
+        heading("3 · Three picks with a footprint in Muslim-majority markets",
+                "what their own annual reports say")
+        with st.container(key="panel_markets"):
+            if market.startswith("UK"):
+                st.info("This check reads the company's SEC annual report, which UK-listed companies don't file. "
+                        "Switch to the US market to see it.")
             else:
-                st.info("Nothing to purify.")
-
-    with tab_ask:
-        if not llm.available():
-            st.info("Add OPENAI_API_KEY to .env to enable the AI coach.")
-        else:
-            context = {"investor": {"type": "individual Muslim investor", "market": market, "currency": C,
-                                    "amount": amount, "risk_appetite": risk, "standard": standard},
-                       "screen": {t: {"status": r["verdict"]["status"], "reasons": r["verdict"]["reasons"],
-                                      "needs_review": r["verdict"]["review"], "evidence": r["business"].get("evidence")}
-                                  for t, r in results.items()},
-                       "stock_ranking": ranking.drop(columns=[c for c in ranking.columns if c.startswith("s_")]).to_dict("records") if not ranking.empty else [],
-                       "allocation": alloc.to_dict("records") if alloc is not None else []}
-            system = ("You explain a Shariah-screened stock recommendation to an everyday Muslim investor. Answer ONLY from "
-                      "the JSON context. If the answer is not in it, say so. Plain English, short. Never call a company "
-                      "halal or haram - passing screens is not a religious ruling. Not financial advice.\n"
-                      + json.dumps(context, default=str))
-            presets = ["Which stocks look strongest and why?", "Why was this split chosen?", "Which companies failed and why?",
-                       "What would a bad year do to my money?", "What would make you change this?"]
-            st.caption("Try a question, or type your own below. Answers come only from the results on this page.")
-            cols = st.columns(len(presets))
-            q = None
-            for col, p in zip(cols, presets):
-                if col.button(p, width="stretch"):
-                    q = p
-            q = st.chat_input("Ask about this recommendation") or q
-            if q:
-                st.chat_message("user").write(q)
-                with st.spinner("Thinking..."):
-                    st.chat_message("assistant").write(llm.ask(system, q))
-
-    with tab_method:
-        st.subheader(meth["name"])
-        st.markdown(f"Source: [{meth['source']}]({meth['url']}) · checked {meth['verified_on']}")
-        st.caption(meth["verification_note"])
-        act = meth["activity"]
-        st.markdown(f"**Business activities ({act['clause']})** - {act['text']} (limit {act['op']} {act['limit']:.0%}):")
-        st.markdown("\n".join(f"- {g}" for g in act["groups"]))
-        st.markdown("**Financial screens**")
-        st.dataframe(pd.DataFrame([{"Clause": r["clause"], "Screen": r["label"], "Rule (quoted)": r["text"],
-                                    "Pass if": f"value {r['op']} {r['limit']:.3%}"} for r in meth["ratios"]]
-                                  + [{"Clause": meth["income"]["clause"], "Screen": "Interest + non-compliant income",
-                                      "Rule (quoted)": meth["income"]["text"],
-                                      "Pass if": f"value {meth['income']['op']} {meth['income']['limit']:.0%}"}]),
-                     width="stretch", hide_index=True)
-        st.markdown("""**How the app applies it - and its limits**
-- Each standard is applied on its own; their rules are never combined.
-- Ratios are calculated in Python. US figures come from SEC EDGAR XBRL; UK figures from Yahoo Finance's copy of the accounts.
-  All balance-sheet items come from one reporting date.
-- "Cash and interest-bearing items" = cash + short-term investments. Long-term interest-bearing securities are shown
-  separately; if including them breaks a limit, the screen needs review.
-- Interest income counts towards the non-compliant income limit. If it is not reported, that screen needs review.
-- Any required figure that is missing gives "needs review" - never a 0 or a guess.
-- US business activities are read by AI from the latest 10-K (Item 1 plus every sentence in the filing that mentions a
-  screened activity). Every quote is checked word-for-word against the filing; unmatched quotes are ignored.
-  UK business activities use the industry classification only, which can exclude but never clear a company.
-- FTSE's quarter-on-quarter monitoring band (31.667%-35%) needs past quarters, which the app does not check:
-  passing values inside the band need review.
-- AAOIFI market value = 12-month average share price x shares outstanding, converted to the reporting currency.
-- Passing these screens is not a religious ruling or a guarantee of compliance.""")
+                with st.spinner("Reading the annual reports..."):
+                    footprint = markets.rank(ranking["ticker"].tolist(), top=3)
+                if not footprint:
+                    st.info("None of the passing companies' annual reports name a Muslim-majority country.")
+                for i, f in enumerate(footprint, 1):
+                    where = ", ".join(f["countries"][:6]) + (f" and {len(f['countries']) - 6} more" if len(f["countries"]) > 6 else "")
+                    st.markdown(f'<div class="row"><div><div class="name">{i}. {html.escape(names.get(f["ticker"], f["ticker"]))}</div>'
+                                f'<div class="meta">{f["ticker"]} · names {len(f["countries"])} Muslim-majority '
+                                f'{"country" if len(f["countries"]) == 1 else "countries"}: {html.escape(where)}'
+                                + (f' · also "{html.escape(", ".join(f["regions"]))}"' if f["regions"] else "") + '</div>'
+                                + (f'<div class="quote">{html.escape(f["quote"][:360])}<div class="meta">✓ verbatim from the '
+                                   f'<a href="{f["url"]}">10-K filed {f["date"]}</a></div></div>' if f["quote"] else "")
+                                + '</div></div>', unsafe_allow_html=True)
+                st.caption("Chosen from the passing stocks by how many Muslim-majority (OIC) countries their latest 10-K "
+                           "names in a business context, with the sentence quoted. This shows where a company operates or "
+                           "sells - it is evidence of presence, not an ethics rating, and it says nothing about who runs "
+                           "the company. Passing the screens is not a religious ruling.")
 
 st.markdown('<div class="disclaimer">Educational hackathon project (Microsoft × LSEG 2026). Not financial advice. '
             'Not a fatwa - this is the evidence a Shariah scholar would review, not a ruling.</div>', unsafe_allow_html=True)
