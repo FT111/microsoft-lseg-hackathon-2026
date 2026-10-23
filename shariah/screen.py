@@ -206,7 +206,7 @@ def _activity_screen(business: dict, standard: str) -> tuple[dict, float | None,
                      note=f"main business is a non-permitted activity ({names}), shown by a verified 10-K quote"
                      + (f"; {found}" if found else ""))
         sc["finance_primary"] = any(a["category"] in FINANCE_CATEGORIES for a in primary)
-        return sc, estimate_or_none, min(1.0, firm)
+        return sc, 1.0, 1.0   # a non-permitted main business means the revenue is non-permitted
     if firm > 0 and breaches(firm, m["limit"], m["op"]):
         return _screen(**base, status=FAIL, value=firm, note=found), estimate_or_none, firm
     if estimate > 0 and breaches(estimate, m["limit"], m["op"]) and estimate >= LOW_CONFIDENCE_FAIL_FLOOR \

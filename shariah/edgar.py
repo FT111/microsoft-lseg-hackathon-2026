@@ -44,7 +44,7 @@ def company_facts(ticker: str) -> dict:
                 if name in CONCEPTS_USED:
                     keep[name] = body.get("units", {})
         return {"cik": cik, "name": facts.get("entityName"), "facts": keep}
-    return cached(f"edgar_facts_v4_{ticker}", produce)  # v4: more dividend tags
+    return cached(f"edgar_facts_v5_{ticker}", produce)  # v4: more dividend tags
 
 
 def submissions(ticker: str) -> dict:
