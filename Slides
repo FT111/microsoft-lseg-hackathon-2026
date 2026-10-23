@@ -1,0 +1,244 @@
+Saba, let's turn the 7-slide outline into a ready-to-build presentation. I'll give you the exact slide titles, the text you can put on each slide, suggested visuals, and what to say while presenting. I'll use real, sourced information where available and clearly mark anything that is only an example.
+
+For an 8-minute hackathon presentation, keep the slides visual and concise. Your slides should show the judges the problem, the product, how it works, and why it is different — not paragraphs of text.
+
+# AMANAT — 7-slide presentation
+
+## Slide 1 — Introduction
+
+[Finance Competency School | Develop Real Finance Competence](https://images.openai.com/static-rsc-4/q_nJHr8u6XZgZjlC7QkL2kvGBPPiCgLiSiLe134ihaVjcmXd-yrqd1tdLnAgLYJvvdcLDEWuociyLLYSgBPnalcfGsDMm0an6hx8JcRA6zbncFirvuRrbbicXrDCmePO3JrNUj5HLQ2shuNVJffpgTmKCQ0degyPjL4N3VUMVaE?purpose=inline)
+
+[financecompetencyschool.com](https://financecompetencyschool.com/?utm_source=chatgpt.com)
+
+# AMANAT
+
+### AI-Powered Shariah Investment Intelligence
+
+Your wealth. Your values. Your trust.
+
+A smarter way to understand company-level Shariah investment screening.
+
+Finance × AI × Transparency
+
+What you say (30 seconds):
+
+“Imagine wanting to invest in a company while making sure it aligns with your values. You may need to examine its business activities, financial statements, and Shariah screening criteria. AMANAT aims to make that process clearer by combining financial calculations, reliable evidence, and AI-powered explanations.”
+
+## Slide 2 — The problem
+
+## Investing with confidence isn't always simple.
+
+Scattered information
+
+Business activities and financial figures must be checked across different sources.
+
+Complex calculations
+
+Investors need to understand relevant financial ratios and thresholds.
+
+Different methodologies
+
+Screening outcomes can vary depending on the methodology used.
+
+Unclear explanations
+
+A result is more useful when investors can see why it was reached.
+
+These are the problems AMANAT is designed to address, rather than quantified claims about all investors.
+
+What you say (50 seconds):
+
+“Shariah screening involves more than checking what a company sells. Financial ratios and the methodology being followed can also matter. Investors need reliable information and a way to understand how a result was calculated. Our goal is to make this process more transparent and easier to follow.”
+
+## Slide 3 — Our solution: How AMANAT works
+
+## From company data to a clearer screening result
+
+1\. Select a company
+
+Choose a listed company to analyse
+
+2\. Gather evidence
+
+Financial statements and business activities
+
+3\. Apply screening rules
+
+Calculate ratios using Python
+
+4\. Explain the result with AI
+
+Show reasoning, source references and missing information
+
+Methodology reference: [FTSE Yasaar Global Equity Shariah Index Series](https://www.lseg.com/en/ftse-russell/indices/global-shariah?utm_source=chatgpt.com).
+
+What you say (60 seconds):
+
+“AMANAT combines financial screening with AI explanations. First, the user selects a company. The system gathers relevant evidence, calculates financial ratios using Python, and applies the selected methodology. AI then explains the outcome in simple language and highlights any missing information. This separation is important because AI should explain the calculations, not invent them.”
+
+## Slide 4 — Product demo: Show how it works
+
+This is the most important slide. Use a screenshot of your actual prototype if it's working, or demonstrate it live.
+
+## AMANAT Company Screening
+
+COMPANY SELECTED
+
+## [Insert your chosen company]
+
+Financial data period: [Insert reporting date]
+
+### Financial screening
+
+Debt / total assets
+
+Actual calculated result
+
+### [X%]
+
+Cash and interest-bearing items / total assets
+
+Actual calculated result
+
+### [X%]
+
+Receivables and cash / total assets
+
+Actual calculated result
+
+### [X%]
+
+SCREENING OUTCOME
+
+[PASS / FAIL / NEEDS REVIEW]
+
+AI explanation: [Explain which checks passed or failed and identify any missing evidence.]
+
+Illustrative layout only. Replace every bracketed item with verified data from your prototype before presenting.
+
+The financial checks above follow the categories published for the FTSE Yasaar methodology. Its published criteria include debt below 33.333% of total assets, cash and interest-bearing items below 33.333% of total assets, receivables and cash below 50% of total assets, and relevant interest/non-compliant income not exceeding 5% of revenue. Verify the detailed rules and calculations against the official methodology before implementing them.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.lseg.com\&sz=32)
+
+LSEG
+
++1
+
+
+
+What you say (2 minutes):
+
+“Let me demonstrate AMANAT using a company from our prototype. We first identify the reporting period and data sources. The system calculates the relevant financial ratios and compares them against our chosen methodology. It then explains why each check passes, fails, or needs further review. The user can see the evidence behind the result rather than receiving an unexplained AI-generated label.”
+
+Important: Don't show invented ratios as real results. If your prototype does not yet retrieve company data, use a clearly labelled test example and explain that it is a demonstration, not a real screening assessment.
+
+## Slide 5 — Market opportunity and competition
+
+## A clear opportunity to improve investment research
+
+# 3.9m
+
+People identifying as Muslim in England and Wales in Census 2021
+
+# 15%
+
+London's population identifying as Muslim in Census 2021
+
+Source: [Office for National Statistics, Census 2021](https://www.ons.gov.uk/peoplepopulationandcommunity/culturalidentity/religion/bulletins/religionenglandandwales/census2021?utm_source=chatgpt.com). These figures indicate potential audience size, not proven demand for AMANAT.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.ons.gov.uk\&sz=32)
+
+Office for National Statistics
+
+
+
+### Existing option: Hargreaves Lansdown
+
+Hargreaves Lansdown provides access to Shariah-compliant funds and ETFs, with information about available investment products.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://www.hl.co.uk\&sz=32)
+
+Hargreaves Lansdown
+
+
+
+### Our proposed differentiation
+
+Company-level screening
+
+Examine an individual company's business activities and financial ratios.
+
+Transparent calculations
+
+Show how each ratio is calculated and which threshold is applied.
+
+Evidence-backed explanations
+
+Make the result easier to understand and independently check.
+
+What you say (60 seconds):
+
+“The UK has a substantial Muslim population, which gives us a relevant audience to investigate. Existing platforms such as Hargreaves Lansdown already offer Shariah-compliant investment products. We are not claiming that these platforms do not provide useful screening. Our proposed differentiation is a more transparent, company-level research experience, where users can see the calculations, methodology, and evidence behind each result.”
+
+## Slide 6 — Technology, trust and safeguards
+
+## AI explains. Code calculates. Evidence supports.
+
+Data layer
+
+Collect company financial statements and relevant business information from traceable sources.
+
+Python screening engine
+
+Calculate ratios deterministically and compare them with the selected methodology.
+
+AI explanation layer
+
+Summarise the outcome using available evidence, without generating unsupported financial figures.
+
+### Built with safeguards
+
+- Missing data → Needs review
+- Failed screening checks → Clearly explained
+- Source and reporting date → Visible
+- Religious interpretation → Not presented as an automatic fatwa
+
+What you say (60 seconds):
+
+“Trust is central to AMANAT. We separate calculations from AI-generated explanations. Python performs the calculations, while the AI explains the results using available evidence. If data is missing, the system should say so instead of guessing. AMANAT is a screening and research aid, not a substitute for qualified Shariah guidance or personalised financial advice.”
+
+## Slide 7 — Roadmap and closing
+
+## From hackathon prototype to a trusted research tool
+
+Now — Build and demonstrate
+
+Deliver a working company-screening flow with sourced inputs, transparent ratios, and AI explanations.
+
+Next — Improve reliability
+
+Test against verified examples, improve data coverage, and validate the experience with potential users and knowledgeable reviewers.
+
+Future — Monitor changes
+
+Explore screening updates and alerts when company financials or business information change.
+
+# AMANAT
+
+Your wealth. Your values. Your trust.
+
+Making Shariah investment screening more transparent, understandable, and evidence-based.
+
+What you say (40 seconds):
+
+“Our immediate goal is to deliver a working prototype and demonstrate that its results are traceable and understandable. Next, we want to improve data coverage, validate the screening process, and explore monitoring features. AMANAT is built around one principle: investors should not just receive a result; they should understand the evidence behind it. Thank you.”
+
+## Final checklist before you present
+
+- Replace the Slide 4 placeholders with your actual prototype results.
+- Make sure the methodology and calculations are consistent.
+- Add small source links at the bottom of slides with factual claims.
+- Use the same navy-and-gold visual style across the deck.
+- Rehearse to finish in about 7 minutes 20 seconds, leaving time for transitions.
+
+My advice: prioritise the demo over extra market statistics. If the judges remember one thing, it should be how AMANAT turns company data into a transparent, evidence-backed screening explanation.
