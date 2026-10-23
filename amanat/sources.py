@@ -2,6 +2,7 @@
 
 import json
 import os
+import ipaddress
 from collections.abc import Iterable
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
@@ -16,28 +17,6 @@ SEC_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 SEC_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data/"
 FTSE_YASAAR_URL = "https://www.lseg.com/en/ftse-russell/indices/global-shariah"
 SUPPORTED_SEC_FORMS = {"10-K", "10-K/A", "20-F", "20-F/A", "40-F", "40-F/A"}
-TRUSTED_SEARCH_DOMAINS = frozenset(
-    {
-        "sec.gov",
-        "data.sec.gov",
-        "lseg.com",
-        "ftserussell.com",
-        "investor.gov",
-        "companieshouse.gov.uk",
-        "company-information.service.gov.uk",
-        "sedarplus.ca",
-        "sedar.com",
-        "asx.com.au",
-        "hkex.com.hk",
-        "londonstockexchange.com",
-        "euronext.com",
-        "sgx.com",
-        "edinet-fsa.go.jp",
-        "asic.gov.au",
-    }
-)
-
-
 class _SearchResultParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -67,18 +46,21 @@ class _SearchResultParser(HTMLParser):
 
 
 class TrustedWebSearchProvider:
-    """Search public pages, retaining only explicitly trusted source domains."""
+    """Search the open web and leave source-quality selection to the model.
+
+    Search and fetching remain bounded, and local/private network destinations
+    are rejected. No domain allowlist is applied: the analyser receives search
+    candidates and decides which sources are reputable enough to cite.
+    """
 
     def __init__(
         self,
         *,
         fetcher: PublicDocumentFetcher | None = None,
-        trusted_domains: Iterable[str] = TRUSTED_SEARCH_DOMAINS,
         timeout: float = 10,
-        max_results: int = 2,
+        max_results: int = 3,
     ) -> None:
         self.fetcher = fetcher or PublicDocumentFetcher(timeout=timeout)
-        self.trusted_domains = frozenset(domain.lower() for domain in trusted_domains)
         self.timeout = timeout
         self.max_results = max_results
 
@@ -95,7 +77,7 @@ class TrustedWebSearchProvider:
         parser.feed(html)
         documents: list[Document] = []
         for url, title in parser.results:
-            if not self._is_trusted(url):
+            if not self._is_public_http_url(url):
                 continue
             try:
                 documents.append(self.fetcher.fetch(url))
@@ -105,11 +87,24 @@ class TrustedWebSearchProvider:
                 break
         return tuple(documents)
 
-    def _is_trusted(self, url: str) -> bool:
-        hostname = (urlparse(url).hostname or "").lower().removeprefix("www.")
-        return any(
-            hostname == domain or hostname.endswith(f".{domain}")
-            for domain in self.trusted_domains
+    @staticmethod
+    def _is_public_http_url(url: str) -> bool:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            return False
+        hostname = parsed.hostname.lower().removeprefix("www.")
+        if hostname in {"localhost", "localhost.localdomain"}:
+            return False
+        try:
+            address = ipaddress.ip_address(hostname)
+        except ValueError:
+            return True
+        return not (
+            address.is_private
+            or address.is_loopback
+            or address.is_link_local
+            or address.is_reserved
+            or address.is_multicast
         )
 
 
@@ -179,6 +174,7 @@ class SecEdgarDocumentProvider:
     def collect(self, stock: Stock) -> tuple[Document, ...]:
         cik, issuer_name = self._find_issuer(stock.ticker)
         submissions = self._get_json(SEC_SUBMISSIONS_URL.format(cik=cik))
+        classification = self._classification_document(stock, cik, submissions)
         recent = submissions.get("filings", {}).get("recent", {})
         for index, form in enumerate(recent.get("form", [])):
             if form not in SUPPORTED_SEC_FORMS:
@@ -197,6 +193,7 @@ class SecEdgarDocumentProvider:
                     text=document.text,
                     published_at=recent["filingDate"][index],
                 ),
+                classification,
             )
         raise LookupError(f"no recent annual SEC filing found for {stock.ticker}")
 
@@ -217,15 +214,14 @@ class SecEdgarDocumentProvider:
         }
         lines = [f"{issuer_name} SEC Company Facts (ticker {stock.ticker})"]
         for label, tags in fields.items():
-            fact = next((facts.get(tag) for tag in tags if facts.get(tag)), None)
-            observation = self._latest_observation(fact)
+            observation = self._latest_observation_for_tags(facts, tags)
             if observation is None:
                 lines.append(f"{label}: unavailable in SEC Company Facts")
                 continue
             value, unit, period = observation
             lines.append(f"{label}: {value:,} {unit} ({period})")
         debt = self._normalised_debt(facts)
-        assets = self._latest_observation(facts.get("Assets"))
+        assets = self._latest_observation_for_tags(facts, ("Assets",))
         if debt:
             value, unit, period = debt
             lines.append(
@@ -251,24 +247,66 @@ class SecEdgarDocumentProvider:
         )
 
     @classmethod
+    def _latest_observation_for_tags(
+        cls, facts: dict, tags: tuple[str, ...]
+    ) -> tuple[float, str, str] | None:
+        observations = [
+            observation
+            for tag in tags
+            if facts.get(tag)
+            for observation in [cls._latest_observation(facts[tag])]
+            if observation is not None
+        ]
+        if not observations:
+            return None
+        return max(observations, key=lambda item: item[2])
+
+    @classmethod
     def _normalised_debt(cls, facts: dict) -> tuple[float, str, str] | None:
         total_tags = (
             "LongTermDebtAndFinanceLeaseObligations",
         )
         for tag in total_tags:
-            observation = cls._latest_observation(facts.get(tag))
+            observation = cls._latest_observation_for_tags(facts, (tag,))
             if observation:
                 return observation
-        current = cls._latest_observation(
-            facts.get("LongTermDebtAndFinanceLeaseObligationsCurrent")
-            or facts.get("LongTermDebtCurrent")
+        current = cls._latest_observation_for_tags(
+            facts,
+            (
+                "LongTermDebtAndFinanceLeaseObligationsCurrent",
+                "LongTermDebtCurrent",
+            ),
         )
-        noncurrent = cls._latest_observation(facts.get("LongTermDebtNoncurrent"))
+        noncurrent = cls._latest_observation_for_tags(
+            facts, ("LongTermDebtNoncurrent",)
+        )
         if not current or not noncurrent or current[2] != noncurrent[2]:
             return None
         if current[1] != noncurrent[1]:
             return None
         return current[0] + noncurrent[0], current[1], current[2]
+
+    @staticmethod
+    def _classification_document(
+        stock: Stock, cik: str, submissions: dict
+    ) -> Document:
+        sic = submissions.get("sic", "unavailable")
+        sic_description = submissions.get("sicDescription", "unavailable")
+        exchanges = ", ".join(submissions.get("exchanges", [])) or "unavailable"
+        text = (
+            f"SEC issuer classification for {stock.display_name} ({stock.ticker})\n"
+            f"CIK: {cik}\nSIC: {sic}\nSIC description: {sic_description}\n"
+            f"SEC exchanges: {exchanges}\n"
+            "SIC is an official issuer classification supplied by SEC EDGAR. "
+            "A commercial-bank, investment-bank, insurance, or other conventional "
+            "finance SIC classification is direct evidence of a prohibited core "
+            "business under the selected Shariah methodology."
+        )
+        return Document(
+            url=SEC_SUBMISSIONS_URL.format(cik=cik),
+            title=f"{stock.display_name} SEC issuer classification",
+            text=text,
+        )
 
     @staticmethod
     def _latest_observation(fact: dict | None) -> tuple[float, str, str] | None:

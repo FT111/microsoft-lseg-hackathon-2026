@@ -31,6 +31,10 @@ Fix = give the AI a UK annual-report source (company IR PDF / Companies House) a
 `llm.business_screen` on it, exactly as the US path does. Until then, demo the portfolio page on
 the US market.
 
+Data-finder: the SEC lookups now cover bank-style tags (JPMorgan / BofA debt and loans), and when a
+required figure is still untagged the AI searches the filing text for it (quote and number verified
+in Python, labelled "AI-found", can never make a screen PASS on its own).
+
 Frederick's `amanat/` analyser and `analyser_test.py` are unchanged and still separate.
 
 ## What AMANAT is

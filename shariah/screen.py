@@ -114,6 +114,24 @@ def quote_in_text(quote: str, text: str) -> bool:
     return bool(parts) and all(len(p) >= 8 and p in t for p in parts)
 
 
+def number_in_quote(printed: str, quote: str) -> bool:
+    """True if the number string (e.g. '460,473') appears in the quote, ignoring spaces and comma style."""
+    digits = re.sub(r"[^\d.]", "", printed or "")
+    if not digits or digits == ".":
+        return False
+    q = re.sub(r"[,\s]", "", _norm(quote))
+    return digits in q and (printed.replace(" ", "") in re.sub(r"\s", "", (quote or "")))
+
+
+def _ai_found(fin: dict, keys) -> list[str]:
+    ai = set(fin.get("ai_extracted") or [])
+    out = []
+    for k in keys:
+        if k in ai or (k == "cash_and_interest_bearing" and "cash" in ai):
+            out.append(k.replace("_", " "))
+    return out
+
+
 # ---------- individual screens ----------
 
 def _screen(key, label, clause, text, status, value=None, limit=None, op=None, note="", inputs=None):
@@ -220,6 +238,12 @@ def _ratio_screen(rule: dict, fin: dict, market_cap: dict | None, standard: str)
         else:
             notes.append(f"with long-term interest-bearing securities: {extended:.1%}")
 
+    if found := _ai_found(fin, list(rule["numerator"]) + [den_key]):
+        notes.append(f"{', '.join(found)} found by the AI in the filing text (quote verified) - a person should confirm "
+                     f"before this screen can pass")
+        if status == PASS:
+            status = NEEDS_REVIEW
+
     band = METHODOLOGIES[standard].get("monitoring_band")
     if band and rule["key"] in band["ratios"] and band["low"] <= value < band["high"]:
         if status == PASS:
@@ -257,6 +281,10 @@ def _income_screen(fin: dict, standard: str, activity_estimate, activity_firm, a
         return _screen(**base, status=NEEDS_REVIEW, value=None if ii_share is None or activity_estimate is None
                        else total, note="; ".join(problems) + f" ({detail})")
     status = FAIL if breaches(total, m["limit"], m["op"]) else PASS
+    if found := _ai_found(fin, ["revenue", "interest_income"]):
+        detail += f"; {', '.join(found)} found by the AI in the filing text (quote verified) - a person should confirm"
+        if status == PASS:
+            status = NEEDS_REVIEW
     return _screen(**base, status=status, value=total, note=detail)
 
 

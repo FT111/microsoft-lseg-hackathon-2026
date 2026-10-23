@@ -103,8 +103,12 @@ Design notes: `docs/agent-architecture.md`.
 
 ## Limitations
 
-- US companies: SEC EDGAR XBRL figures, whatever companies tagged; untagged items are NEEDS REVIEW,
-  not zero. UK / non-SEC companies: Yahoo Finance's copy of the accounts (a vendor copy, not the
+- US companies: SEC EDGAR XBRL figures (including bank-style tags such as loans as receivables).
+  If a required figure is untagged, the AI searches the filing text for it; a figure is only used
+  when its quote is found word-for-word in the filing and contains the number, it is labelled
+  "AI-found", and a screen that depends on it can be FAIL or NEEDS REVIEW but never PASS without a
+  person confirming. Figures that the filing itself does not state (e.g. Apple no longer breaks out
+  interest income) stay NEEDS REVIEW. UK / non-SEC companies: Yahoo Finance's copy of the accounts (a vendor copy, not the
   filing), with lease liabilities excluded from debt like the SEC path.
 - US business activities come from the latest 10-K: Item 1 (first 12,000 characters) plus every
   sentence in the filing that mentions a screened activity. Revenue shares are often not disclosed,

@@ -31,6 +31,29 @@ def market_value(fin: dict, ticker: str, fx: float | None = 1.0) -> dict | None:
                     f"{shares / 1e9:,.2f}bn shares" + (f" x FX {fx:.4f}" if fx != 1.0 else "")}
 
 
+def find_missing_figures(ticker: str, fin: dict, use_ai: bool = True) -> dict:
+    """Data-finder step of the Shariah compliance check: figures the XBRL data lacks are looked
+    up by the AI in the filing text, verified in Python, and marked so no screen can PASS on them."""
+    missing = [k for k in edgar.REQUIRED_FOR_SCREENS if k in (fin.get("missing") or [])]
+    if not missing or not use_ai or not llm.available() or not fin.get("period_end"):
+        return fin
+    for annual in (False, True):
+        keys = [k for k in missing if (k in edgar.INCOME_KEYS) == annual]
+        if not keys:
+            continue
+        try:
+            ft = edgar.financial_text(ticker, fin["period_end"], annual=annual)
+            if not ft.get("text"):
+                continue
+            found = llm.extract_figures(fin["name"], ft["text"], {k: edgar.FIGURE_LABELS[k] for k in keys})
+        except Exception as e:
+            fin = {**fin, "notes": fin.get("notes", []) + [f"AI figure search failed: {type(e).__name__}"]}
+            continue
+        if found:
+            fin = edgar.apply_extracted(fin, found, ft)
+    return fin
+
+
 def business(ticker: str, fin: dict, use_ai: bool = True) -> dict:
     sub = edgar.submissions(ticker)
     tenk = sub.get("latest_10k") or {}
@@ -62,6 +85,7 @@ def screen_one(ticker: str, standard: str, use_ai: bool = True) -> dict:
     fin = edgar.financials(ticker)
     if fin.get("name", "").isupper():
         fin = {**fin, "name": fin["name"].title()}
+    fin = find_missing_figures(ticker, fin, use_ai)
     mcap = market_value(fin, ticker)
     biz = business(ticker, fin, use_ai)
     v = screen.verdict(fin, biz, standard, mcap)

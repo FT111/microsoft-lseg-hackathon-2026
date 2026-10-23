@@ -178,3 +178,57 @@ class QuoteCheck(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AiFoundFigures(unittest.TestCase):
+    """Figures the AI found in filing text (FICTIONAL) can fill a gap but never clear a screen."""
+
+    def test_number_in_quote(self):
+        from shariah.screen import number_in_quote
+        self.assertTrue(number_in_quote("460,473", "Long-term debt 460,473 410,000"))
+        self.assertTrue(number_in_quote("1,516.3", "Loans, net of allowance $ 1,516.3"))
+        self.assertFalse(number_in_quote("460,473", "Long-term debt 460,474"))
+        self.assertFalse(number_in_quote("", "anything"))
+
+    def test_ai_found_debt_cannot_pass(self):
+        v = verdict(fin(ai_extracted=["total_debt"]), business(), FTSE)
+        s = screen_of(v, "debt")
+        self.assertEqual(s["status"], NEEDS_REVIEW)
+        self.assertIn("found by the AI", s["note"])
+
+    def test_ai_found_debt_still_fails(self):
+        v = verdict(fin(total_debt=500.0, ai_extracted=["total_debt"]), business(), FTSE)
+        self.assertEqual(screen_of(v, "debt")["status"], FAIL)
+
+    def test_ai_found_interest_income_cannot_pass(self):
+        v = verdict(fin(ai_extracted=["interest_income"]), business(), FTSE)
+        self.assertEqual(screen_of(v, "noncompliant_income")["status"], NEEDS_REVIEW)
+
+    def test_extraction_is_verified_in_python(self):
+        from unittest import mock
+        from shariah import llm
+        text = "Fictional Bank balance sheet (in millions): Long-term debt 460,473; Loans, net 1,516,300."
+        reply = {"items": [
+            {"key": "total_debt", "as_printed": "460,473", "unit_multiplier": 1000000, "quote": "Long-term debt 460,473", "period": "x"},
+            {"key": "receivables", "as_printed": "1,516,300", "unit_multiplier": 1000000, "quote": "Loans, net 9,999,999", "period": "x"},
+            {"key": "revenue", "as_printed": "123", "unit_multiplier": 1000000, "quote": "made-up sentence 123", "period": "x"},
+        ]}
+        with mock.patch.object(llm, "ask_json", return_value=reply):
+            found = llm.extract_figures("Fictional Bank", text, {"total_debt": "d", "receivables": "r", "revenue": "v"})
+        self.assertEqual(set(found), {"total_debt"})                 # the other two quotes are not in the text
+        self.assertEqual(found["total_debt"]["value"], 460473e6)
+
+    def test_apply_extracted_marks_and_recomputes(self):
+        from shariah import edgar
+        f = fin(total_debt=None)
+        f["items"] = {"total_assets": {"value": 1000.0, "concept": "Assets", "period_end": "2026-06-30"}, "total_debt": None,
+                      "cash": {"value": 100.0, "concept": "Cash", "period_end": "2026-06-30"}}
+        f["missing"] = ["total_debt"]
+        out = edgar.apply_extracted(f, {"total_debt": {"value": 200.0, "quote": "Total debt 200", "as_printed": "200",
+                                                       "period": ""}},
+                                    {"form": "10-Q", "report_date": "2026-06-30", "matches_period": True})
+        self.assertEqual(out["total_debt"], 200.0)
+        self.assertEqual(out["ai_extracted"], ["total_debt"])
+        self.assertNotIn("total_debt", out["missing"])
+        self.assertTrue(any("found by the AI" in n for n in out["notes"]))
+        self.assertIsNone(f["total_debt"])                           # original untouched

@@ -2,7 +2,7 @@ Saba, let's turn the 7-slide outline into a ready-to-build presentation. I'll gi
 
 For an 8-minute hackathon presentation, keep the slides visual and concise. Your slides should show the judges the problem, the product, how it works, and why it is different — not paragraphs of text.
 
-# AMANAT — 7-slide presentation
+# AMANAT — 8-slide presentation
 
 ## Slide 1 — Introduction
 
@@ -132,7 +132,42 @@ What you say (2 minutes):
 
 Important: Don't show invented ratios as real results. If your prototype does not yet retrieve company data, use a clearly labelled test example and explain that it is a demonstration, not a real screening assessment.
 
-## Slide 5 — Market opportunity and competition
+## Slide 5 — The recommendation: where the £100,000 goes
+
+## Your £100,000 plan — and why
+
+*All figures below come from the live prototype ("Build my portfolio", FTSE Shariah standard, Adventurous profile, data as of 23 Oct 2026). Re-check them on the morning of the demo and update if the app changes.*
+
+LEFT — the funnel (big numbers)
+
+# 36 → 13 → 9
+
+36 FTSE 100 companies checked · 13 pass every FTSE Shariah screen · 21 fail · 2 flagged for a person to check · 9 make the plan
+
+RIGHT — where the money goes (pie chart, screenshot from the app)
+
+| Company | Why it's in | In your plan |
+|---|---|---|
+| Rio Tinto | Passes all screens · score 82/100 · +17% over 1 year | £11,250 |
+| Shell | Passes all screens · score 72/100 · +40% over 1 year | £11,250 |
+| Anglo American | Passes all screens · score 68/100 · +28% over 1 year | £10,000 |
+| BP, Croda, Associated British Foods, Halma, AstraZeneca, Hikma | Pass all screens, ranked next | £11,250 each |
+
+BOTTOM — three cards
+
+- **Left out on purpose:** Glencore and SSE pass today but sit close to a Shariah limit, so they could have to be sold later → "Watch", not bought.
+- **In a bad year:** a 2008-type crash would take £100,000 to about **£79,900**. (2020: £99,842 · 2022: £101,932.)
+- **Give to charity:** about **£19** of this year's dividends comes from non-compliant income → purification.
+
+Footer: Score = momentum + lower volatility + smaller past falls + distance from the Shariah limits. Python does the maths; AI explains it. Educational project — not financial advice, not a fatwa.
+
+What you say (60 seconds):
+
+"So where does Aisha's £100,000 go? We started with 36 FTSE 100 companies. Thirteen pass every FTSE Shariah screen, 21 fail, and two we flag for a person rather than guess. From the thirteen we rank by momentum, risk and — something ordinary screeners ignore — how close each company is to a Shariah limit. Glencore and SSE pass today but sit near a limit, so we watch them instead of buying. The plan holds nine companies, roughly equal amounts, never more than about eleven percent in one. In a 2008-type year this would have fallen to about £79,900 — we show that up front. And about £19 of dividends should go to charity this year. Every one of these numbers is calculated in Python and traceable to its source; the AI only explains them."
+
+Be ready for: "Isn't this heavy on oil and mining?" — Yes: Shell, BP, Rio Tinto and Anglo American are four of nine. Answer honestly: the screen removes banks and many consumer companies, so what's left tilts to energy and materials; a sector cap is our next improvement.
+
+## Slide 6 — Market opportunity and competition
 
 ## A clear opportunity to improve investment research
 
@@ -180,7 +215,7 @@ What you say (60 seconds):
 
 “The UK has a substantial Muslim population, which gives us a relevant audience to investigate. Existing platforms such as Hargreaves Lansdown already offer Shariah-compliant investment products. We are not claiming that these platforms do not provide useful screening. Our proposed differentiation is a more transparent, company-level research experience, where users can see the calculations, methodology, and evidence behind each result.”
 
-## Slide 6 — Technology, trust and safeguards
+## Slide 7 — Technology, trust and safeguards
 
 ## AI explains. Code calculates. Evidence supports.
 
@@ -207,7 +242,7 @@ What you say (60 seconds):
 
 “Trust is central to AMANAT. We separate calculations from AI-generated explanations. Python performs the calculations, while the AI explains the results using available evidence. If data is missing, the system should say so instead of guessing. AMANAT is a screening and research aid, not a substitute for qualified Shariah guidance or personalised financial advice.”
 
-## Slide 7 — Roadmap and closing
+## Slide 8 — Roadmap and closing
 
 ## From hackathon prototype to a trusted research tool
 
@@ -239,6 +274,6 @@ What you say (40 seconds):
 - Make sure the methodology and calculations are consistent.
 - Add small source links at the bottom of slides with factual claims.
 - Use the same navy-and-gold visual style across the deck.
-- Rehearse to finish in about 7 minutes 20 seconds, leaving time for transitions.
+- Rehearse to finish in about 7 minutes 30 seconds (trim slide 6, market, to 40 seconds to make room for the plan slide), leaving time for transitions.
 
 My advice: prioritise the demo over extra market statistics. If the judges remember one thing, it should be how AMANAT turns company data into a transparent, evidence-backed screening explanation.

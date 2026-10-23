@@ -44,7 +44,7 @@ def company_facts(ticker: str) -> dict:
                 if name in CONCEPTS_USED:
                     keep[name] = body.get("units", {})
         return {"cik": cik, "name": facts.get("entityName"), "facts": keep}
-    return cached(f"edgar_facts_v2_{ticker}", produce)
+    return cached(f"edgar_facts_v3_{ticker}", produce)
 
 
 def submissions(ticker: str) -> dict:
@@ -52,16 +52,19 @@ def submissions(ticker: str) -> dict:
     def produce():
         s = _get(f"https://data.sec.gov/submissions/CIK{cik}.json").json()
         recent = s.get("filings", {}).get("recent", {})
-        tenk = None
-        for form, acc, doc, date in zip(recent.get("form", []), recent.get("accessionNumber", []),
-                                        recent.get("primaryDocument", []), recent.get("filingDate", [])):
-            if form == "10-K":
-                tenk = {"accession": acc, "doc": doc, "date": date,
-                        "url": f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc.replace('-', '')}/{doc}"}
-                break
+        tenk, filings = None, []
+        for form, acc, doc, date, rep in zip(recent.get("form", []), recent.get("accessionNumber", []),
+                                             recent.get("primaryDocument", []), recent.get("filingDate", []),
+                                             recent.get("reportDate", [])):
+            if form in ("10-K", "10-Q") and len(filings) < 12:
+                entry = {"form": form, "accession": acc, "doc": doc, "date": date, "report_date": rep,
+                         "url": f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc.replace('-', '')}/{doc}"}
+                filings.append(entry)
+                if form == "10-K" and tenk is None:
+                    tenk = entry
         return {"name": s.get("name"), "sic": s.get("sic"), "sicDescription": s.get("sicDescription"),
-                "latest_10k": tenk}
-    return cached(f"edgar_subs_{ticker}", produce)
+                "latest_10k": tenk, "filings": filings}
+    return cached(f"edgar_subs_v2_{ticker}", produce)
 
 
 # Words that point at activities the Shariah methodologies exclude. Sentences containing them are
@@ -74,6 +77,7 @@ ACTIVITY_KEYWORDS = r"(alcohol|beer|wine|spirits|liquor|brew|distill|tobacco|cig
 
 def _filing_text(url: str) -> str:
     html = _get(url).text
+    html = re.sub(r"(?is)<ix:header>.*?</ix:header>", " ", html)   # hidden inline-XBRL metadata, not text
     text = re.sub(r"(?is)<(script|style).*?</\1>", " ", html)
     text = re.sub(r"(?s)<[^>]+>", " ", text)
     text = re.sub(r"&#160;|&nbsp;|&#xa0;", " ", text)
@@ -125,18 +129,22 @@ def business_section(ticker: str, max_chars: int = 12000, max_snippet_chars: int
 
 ASSETS = ["Assets"]
 DEBT_COMBINED = ["DebtLongtermAndShorttermCombinedAmount"]
-DEBT_LT_INCL_CURRENT = ["LongTermDebt"]
+DEBT_LT_INCL_CURRENT = ["LongTermDebt", "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities"]
 DEBT_LT_NONCURRENT = ["LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations"]
 DEBT_LT_CURRENT = ["LongTermDebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent"]
 DEBT_ALL_CURRENT = ["DebtCurrent"]
-DEBT_SHORT = ["ShortTermBorrowings", "CommercialPaper"]
+DEBT_SHORT = ["ShortTermBorrowings", "CommercialPaper", "OtherShortTermBorrowings"]
 CASH = ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"]
 SHORT_TERM_INTEREST_BEARING = ["ShortTermInvestments", "MarketableSecuritiesCurrent",
                                "AvailableForSaleSecuritiesDebtSecuritiesCurrent"]
 LONG_TERM_INTEREST_BEARING = ["MarketableSecuritiesNoncurrent", "AvailableForSaleSecuritiesDebtSecuritiesNoncurrent"]
 DEBT_SECURITIES_TOTAL = ["AvailableForSaleSecuritiesDebtSecurities", "HeldToMaturitySecurities"]
 RECEIVABLES = ["AccountsReceivableNetCurrent", "ReceivablesNetCurrent", "AccountsNotesAndLoansReceivableNetCurrent",
-               "AccountsAndOtherReceivablesNetCurrent"]
+               "AccountsAndOtherReceivablesNetCurrent",
+               # banks: loans are their receivables
+               "FinancingReceivableExcludingAccruedInterestAfterAllowanceForCreditLoss",
+               "LoansAndLeasesReceivableNetReportedAmount", "NotesAndLoansReceivableNetCurrent", "OtherReceivables"]
+INTEREST_BEARING_DEPOSITS = ["InterestBearingDepositsInBanks"]   # banks: interest-bearing by definition
 REVENUE = ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet",
            "RevenueFromContractWithCustomerIncludingAssessedTax"]
 # Interest income, best concept first. Broader concepts (that also include dividends or
@@ -154,7 +162,7 @@ DIVIDENDS = ["PaymentsOfDividendsCommonStock", "PaymentsOfDividends"]
 SHARES = ["CommonStockSharesOutstanding", "WeightedAverageNumberOfSharesOutstandingBasic"]
 
 CONCEPTS_USED = set(ASSETS + DEBT_COMBINED + DEBT_LT_INCL_CURRENT + DEBT_LT_NONCURRENT + DEBT_LT_CURRENT
-                    + DEBT_ALL_CURRENT + DEBT_SHORT + CASH + SHORT_TERM_INTEREST_BEARING
+                    + DEBT_ALL_CURRENT + DEBT_SHORT + CASH + SHORT_TERM_INTEREST_BEARING + INTEREST_BEARING_DEPOSITS
                     + LONG_TERM_INTEREST_BEARING + DEBT_SECURITIES_TOTAL + RECEIVABLES + REVENUE
                     + [c for c, _ in INTEREST_INCOME] + DIVIDENDS + SHARES + ["EntityCommonStockSharesOutstanding"])
 FORMS = ("10-K", "10-K/A", "10-Q", "10-Q/A")
@@ -252,7 +260,10 @@ def _balance_sheet(f, end):
         "long_term_interest_bearing": lt,
         "receivables": _first_instant(f, RECEIVABLES, end),
     }
-    items["cash_and_interest_bearing"] = (_sum([cash, st], "cash + short-term interest-bearing items")
+    dep = _first_instant(f, INTEREST_BEARING_DEPOSITS, end)
+    if dep:
+        items["interest_bearing_deposits"] = dep
+    items["cash_and_interest_bearing"] = (_sum([cash, st, dep], "cash + short-term interest-bearing items")
                                           if cash else None)
     return items, notes
 
@@ -338,3 +349,100 @@ def financials(ticker: str, today: str | None = None) -> dict:
 
 def facts_url(cik: str) -> str:
     return f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+
+
+# ---------- figures the XBRL data is missing: let the AI find them in the filing ----------
+
+BALANCE_KEYWORDS = (r"total debt|long-term debt|long term debt|short-term borrowings|borrowings|commercial paper|"
+                    r"notes payable|accounts receivable|trade receivables|receivables|loans, net|net loans|total assets|"
+                    r"cash and cash equivalents|cash and due from banks")
+INCOME_KEYWORDS = (r"interest income|interest and dividend income|interest and other income|investment income|"
+                   r"other income \(expense\)|other income/\(expense\)|total revenue|net revenue|total net revenue|net sales|"
+                   r"sales and other operating revenue|total revenues and other income")
+BALANCE_KEYS = ("total_assets", "total_debt", "cash", "receivables")
+INCOME_KEYS = ("revenue", "interest_income")
+REQUIRED_FOR_SCREENS = ("total_assets", "total_debt", "cash", "receivables", "revenue", "interest_income")
+FIGURE_LABELS = {
+    "total_assets": "total assets",
+    "total_debt": "total debt: all interest-bearing borrowings (long-term debt including the current portion, plus "
+                  "short-term borrowings and commercial paper); NOT deposits, NOT lease liabilities",
+    "cash": "cash and cash equivalents",
+    "receivables": "accounts receivable, net (for a bank: loans, net of allowance)",
+    "revenue": "total revenue for the most recent full financial year (for a bank: total net revenue)",
+    "interest_income": "interest income for the same year (investment / interest income earned; for a bank: total "
+                       "interest income)",
+}
+
+
+def financial_text(ticker: str, period_end: str | None, annual: bool = False, max_chars: int = 14000) -> dict:
+    """Passages that mention the figures the screens need. Balance-sheet figures come from the
+    filing whose report date matches `period_end`; 12-month income figures (annual=True) from the
+    latest 10-K. The AI reads this; quotes are checked against it."""
+    sub = submissions(ticker)
+    filings = sub.get("filings") or ([sub["latest_10k"]] if sub.get("latest_10k") else [])
+    if not filings:
+        return {"text": "", "url": None, "form": None, "report_date": None, "matches_period": False}
+    if annual:
+        filing = sub.get("latest_10k") or filings[0]
+    else:
+        filing = next((f for f in filings if f.get("report_date") == period_end), None) or sub.get("latest_10k") or filings[0]
+    pattern = INCOME_KEYWORDS if annual else BALANCE_KEYWORDS
+    def produce():
+        text = _filing_text(filing["url"])
+        windows, seen = [], set()
+        for m in re.finditer(pattern, text, re.I):
+            a, b = max(0, m.start() - 350), min(len(text), m.end() + 350)
+            key = a // 500
+            chunk = text[a:b]
+            if key in seen or "http" in chunk:
+                continue
+            seen.add(key)
+            # passages dense with figures (statements, notes) beat narrative mentions
+            score = len(re.findall(r"\d{1,3}(?:,\d{3})+|\d{3,}", chunk))
+            windows.append((score, a, chunk))
+        windows.sort(key=lambda w: -w[0])
+        chosen, total = [], 0
+        for score, a, chunk in windows:
+            if score == 0:
+                break
+            chosen.append((a, chunk))
+            total += len(chunk)
+            if total > max_chars:
+                break
+        chosen.sort()
+        return {"text": "\n...\n".join(c for _, c in chosen), "url": filing["url"], "form": filing["form"],
+                "report_date": filing.get("report_date"), "matches_period": filing.get("report_date") == period_end,
+                "annual": annual}
+    return cached(f"edgar_fin_text_v3_{ticker}_{filing['accession']}_{'inc' if annual else 'bs'}", produce)
+
+
+def apply_extracted(fin: dict, found: dict, source: dict) -> dict:
+    """Fill missing items with AI-found, Python-verified figures. Marks them so every screen that
+    uses one says so and cannot PASS without a person confirming."""
+    fin = {**fin, "items": dict(fin["items"]), "notes": list(fin.get("notes", [])), "sources": dict(fin.get("sources", {}))}
+    added = []
+    for key, f in found.items():
+        if key not in REQUIRED_FOR_SCREENS or fin["items"].get(key):
+            continue
+        fin["items"][key] = {"value": f["value"], "period_end": source.get("report_date") or fin.get("period_end"),
+                             "concept": f"AI-found in {source.get('form')} text (quote verified): \"{f['quote'][:120]}\"",
+                             "quote": f["quote"], "ai_extracted": True}
+        added.append(key)
+    if not added:
+        return fin
+    if "cash" in added and not fin["items"].get("cash_and_interest_bearing"):
+        parts = [fin["items"]["cash"]] + [fin["items"][k] for k in ("short_term_interest_bearing", "interest_bearing_deposits")
+                                          if fin["items"].get(k)]
+        fin["items"]["cash_and_interest_bearing"] = _sum(parts, "cash + short-term interest-bearing items")
+    for k, v in fin["items"].items():
+        fin[k] = v["value"] if v else None
+        fin["sources"][k] = v["concept"] if v else "not reported"
+    fin["missing"] = [k for k in ("total_assets", "total_debt", "cash", "receivables", "revenue", "interest_income",
+                                  "shares_outstanding") if not fin["items"].get(k)]
+    fin["ai_extracted"] = sorted(set(fin.get("ai_extracted", [])) | set(added))
+    fin["notes"].append(f"{', '.join(k.replace('_', ' ') for k in added)}: not tagged in XBRL - found by the AI in the "
+                        f"{source.get('form')} text and verified word-for-word; a person should confirm")
+    if not source.get("matches_period"):
+        fin["notes"].append(f"those figures are from the filing dated {source.get('report_date')}, not the balance-sheet "
+                            f"date {fin.get('period_end')}")
+    return fin

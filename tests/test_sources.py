@@ -43,10 +43,34 @@ class SecSourceTests(unittest.TestCase):
             (100.0, "USD", "2025-12-31"),
         )
 
-    def test_web_search_accepts_only_trusted_domains(self) -> None:
-        provider = TrustedWebSearchProvider(trusted_domains={"sec.gov"})
-        self.assertTrue(provider._is_trusted("https://www.sec.gov/Archives/report"))
-        self.assertFalse(provider._is_trusted("https://example.com/report"))
+    def test_latest_equivalent_tag_uses_newest_period(self) -> None:
+        facts = {
+            "Assets": {
+                "units": {
+                    "USD": [
+                        {"val": 10, "form": "10-K", "fy": 2023, "filed": "2024-02-01", "end": "2023-12-31"},
+                    ]
+                }
+            },
+            "AssetsCurrent": {
+                "units": {
+                    "USD": [
+                        {"val": 20, "form": "10-K", "fy": 2025, "filed": "2026-02-01", "end": "2025-12-31"},
+                    ]
+                }
+            },
+        }
+        self.assertEqual(
+            SecEdgarDocumentProvider._latest_observation_for_tags(
+                facts, ("Assets", "AssetsCurrent")
+            ),
+            (20.0, "USD", "2025-12-31"),
+        )
+
+    def test_web_search_open_mode_accepts_public_secondary_sources(self) -> None:
+        provider = TrustedWebSearchProvider()
+        self.assertTrue(provider._is_public_http_url("https://example.com/report"))
+        self.assertFalse(provider._is_public_http_url("http://127.0.0.1/report"))
 
     def test_global_provider_searches_non_us_official_domains(self) -> None:
         class Search:

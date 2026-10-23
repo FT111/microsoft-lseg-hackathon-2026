@@ -3,6 +3,7 @@
 import json
 import os
 from collections.abc import Iterable
+from dataclasses import replace
 from typing import Any, Protocol
 
 from openai import AzureOpenAI
@@ -33,7 +34,7 @@ class DocumentProvider(Protocol):
 
 class WebSearchProvider(Protocol):
     def search(self, query: str) -> tuple[Document, ...]:
-        """Search and fetch trusted public source pages."""
+        """Search and fetch bounded public source pages."""
 
 
 class OpenAIInferenceClient:
@@ -132,12 +133,13 @@ class StockAnalyser:
                 ),
             )
             documents += tuple(supplemental)
-        return self._parse_response(
+        result = self._parse_response(
             stock,
             response,
             {document.url for document in documents},
             research_context,
         )
+        return self._apply_deterministic_disqualifications(result, documents)
 
     def analyse_from_urls(self, stock: Stock, urls: Iterable[str]) -> AnalysisResult:
         documents = tuple(self.document_provider.fetch(url) for url in urls)
@@ -195,14 +197,20 @@ same length and every chart value must be supported by the cited source. This is
 research support, not a religious ruling or investment advice."""
         if final_pass:
             return prompt + (
-                "\nThis is the final pass after trusted web research. Do not request "
+                "\nThis is the final pass after bounded web research. Do not request "
                 "more searches; synthesize only the supplied sources."
             )
         return prompt + (
             "\nIf a material question cannot be resolved from the supplied sources, "
-            "add a web_search_requests array with at most three objects of the form "
+            "add a web_search_requests array with at most five objects of the form "
             '{"query":"precise query","reason":"what is missing"}. Use an empty array '
-            "when no search is needed. Search only for primary or official sources."
+            "when no search is needed. Web-search pages are unverified candidates: "
+            "you must assess the publisher, proximity to the original evidence, "
+            "specificity, date, and corroboration before using one. Select and cite "
+            "only sources that seem reputable for the particular claim. Prefer "
+            "primary sources when available, but do not discard a useful reputable "
+            "secondary source solely because it is not on a fixed allowlist. Never "
+            "treat a weak source alone as proof of a decisive classification."
         )
 
     @staticmethod
@@ -218,7 +226,7 @@ research support, not a religious ruling or investment advice."""
         supplemental = tuple(supplemental)
         if supplemental:
             source_text += "\n\n" + "\n\n".join(
-                f"--- TRUSTED WEB SOURCE {index}: {doc.url} ({doc.title}) ---\n{doc.text}"
+                f"--- WEB SEARCH SOURCE {index}: {doc.url} ({doc.title}) ---\n{doc.text}"
                 for index, doc in enumerate(supplemental, start=1)
             )
         return (
@@ -243,6 +251,9 @@ research support, not a religious ruling or investment advice."""
             + json.dumps(research_context)
             + "\n\nThe preliminary analysis requested web research because its evidence "
             "was insufficient. Re-evaluate affected screens using the new pages. "
+            "The web-search pages are unverified candidates, not automatically trusted "
+            "evidence. Assess their publisher and corroboration, use only reputable "
+            "candidates, and do not cite pages that do not support the claim. "
             "The final report must include a research object with used_web_research, "
             "searches, source_urls, impact, and changes. Explain whether web research "
             "confirmed, changed, or failed to resolve each requested issue. Any "
@@ -253,8 +264,8 @@ research support, not a religious ruling or investment advice."""
     def _search_requests(response: str) -> tuple[dict[str, str], ...]:
         try:
             requests = json.loads(response).get("web_search_requests", [])
-            if not isinstance(requests, list) or len(requests) > 3:
-                raise ValueError("web_search_requests must contain at most three items")
+            if not isinstance(requests, list) or len(requests) > 5:
+                raise ValueError("web_search_requests must contain at most five items")
             validated = []
             for request in requests:
                 if not isinstance(request, dict) or not str(request.get("query", "")).strip():
@@ -359,6 +370,67 @@ research support, not a religious ruling or investment advice."""
         result.setdefault("impact", "No additional web research was used.")
         result.setdefault("changes", [])
         return result
+
+    @staticmethod
+    def _apply_deterministic_disqualifications(
+        result: AnalysisResult, documents: tuple[Document, ...]
+    ) -> AnalysisResult:
+        """Enforce an explicit conventional-finance issuer classification."""
+
+        classification = next(
+            (document for document in documents if "issuer classification" in document.title.lower()),
+            None,
+        )
+        if not classification:
+            return result
+        lines = classification.text.splitlines()
+        sic_line = next(
+            (line for line in lines if line.lower().startswith("sic description:")),
+            "",
+        )
+        prohibited_terms = (
+            "commercial bank",
+            "national commercial bank",
+            "investment bank",
+            "credit union",
+            "security broker",
+            "insurance",
+            "loan",
+            "finance",
+        )
+        if not any(term in sic_line.lower() for term in prohibited_terms):
+            return result
+        quote = sic_line
+        breach = ScreenResult(
+            name="Prohibited business activities",
+            status=ScreenStatus.FAIL,
+            finding=(
+                "The official SEC issuer classification identifies a conventional "
+                "finance business. This is a fundamental Shariah disqualification."
+            ),
+            evidence=(
+                Evidence(
+                    source_url=classification.url,
+                    quote=quote,
+                    rationale="Official issuer classification establishes the core business category.",
+                ),
+            ),
+        )
+        screens = tuple(
+            screen
+            for screen in result.screens
+            if screen.name.lower() != "prohibited business activities"
+        )
+        return replace(
+            result,
+            overall_status=ScreenStatus.FAIL,
+            screens=(breach,) + screens,
+            summary=(
+                result.summary
+                + " Deterministic issuer classification confirms a prohibited "
+                "conventional-finance core business; the company is fundamentally disqualified."
+            ),
+        )
 
     @staticmethod
     def _parse_visualisation(value: Any) -> dict[str, Any] | None:
