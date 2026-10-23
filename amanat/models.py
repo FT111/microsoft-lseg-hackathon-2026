@@ -49,6 +49,7 @@ class Evidence:
     source_url: str
     quote: str
     rationale: str
+    visualisation: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -66,5 +67,7 @@ class AnalysisResult:
     overall_status: ScreenStatus
     summary: str
     screens: tuple[ScreenResult, ...]
+    summary_visualisation: dict[str, Any] | None = None
     limitations: tuple[str, ...] = ()
+    research: dict[str, Any] = field(default_factory=dict)
     raw_response: dict[str, Any] = field(default_factory=dict, repr=False)

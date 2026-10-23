@@ -31,6 +31,27 @@ st.markdown(
 )
 
 
+def render_visualisation(visualisation: dict | None) -> None:
+    """Render only validated agent chart data."""
+
+    if not visualisation:
+        return
+    chart_type = visualisation["type"]
+    labels = visualisation["labels"]
+    values = visualisation["values"]
+    title = visualisation.get("title")
+    unit = visualisation.get("unit", "")
+    if title:
+        st.caption(title)
+    if chart_type == "metric" and len(values) == 1:
+        st.metric(labels[0], f"{values[0]} {unit}".strip())
+    elif chart_type in {"bar", "donut"}:
+        st.bar_chart(
+            {label: [value] for label, value in zip(labels, values, strict=True)},
+            height=180,
+        )
+
+
 class DemoInference:
     """Deterministic local response so the UI can be tested without an API call."""
 
@@ -157,16 +178,16 @@ with st.sidebar:
     st.divider()
     st.header("Data sources")
     st.caption(
-        "Automatic sources: SEC EDGAR annual filings plus the official "
-        "FTSE Yasaar methodology."
+        "Automatic sources: SEC EDGAR where available; otherwise trusted "
+        "global registry/exchange pages, plus the official FTSE Yasaar methodology."
     )
     request_review = st.button("Request review", type="primary", use_container_width=True)
 
 st.subheader("Automatic public-source collection")
 st.info(
-    "The app finds the latest annual filing through SEC EDGAR and fetches the "
-    "official FTSE Yasaar methodology. Results are evidence-backed, and missing "
-    "or ambiguous information is marked NEEDS REVIEW."
+    "The app first checks SEC EDGAR, then falls back to trusted international "
+    "registry and exchange sources for non-US issuers. Results are evidence-backed, "
+    "and missing or ambiguous information is marked NEEDS REVIEW."
 )
 
 with st.expander("How this works", expanded=False):
@@ -191,12 +212,17 @@ if st.button("Run analysis", use_container_width=True) or request_review:
         if not sec_contact:
             st.error("Enter a contact email so SEC EDGAR requests identify this app.")
             st.stop()
-        with st.spinner("Collecting SEC filing and FTSE methodology..."):
+        with st.status("Collecting trusted source documents...", expanded=True) as collection_status:
+            st.write("Looking up the latest SEC annual filing and company facts.")
             documents = AutomaticDocumentProvider(
                 sec_provider=SecEdgarDocumentProvider(
                     user_agent=f"Amanat/0.1 {sec_contact}"
                 )
             ).collect(stock)
+            collection_status.update(
+                label=f"Collected {len(documents)} trusted source documents",
+                state="complete",
+            )
         st.success(f"Collected {len(documents)} source documents.")
         st.markdown("#### Fundamentals collected")
         fundamentals = next(
@@ -209,14 +235,32 @@ if st.button("Run analysis", use_container_width=True) or request_review:
                 for line in fundamentals.text.splitlines()[1:]
                 if ":" in line and not line.startswith("These reported")
             ]
-            st.dataframe(
-                [{"Metric": key.strip(), "Reported value": value.strip()} for key, value in fundamental_rows],
-                hide_index=True,
-                use_container_width=True,
-            )
+            metric_values = []
+            for key, value in fundamental_rows:
+                raw_value = value.strip().split(" ", 1)[0].replace(",", "")
+                try:
+                    metric_values.append((key.strip(), float(raw_value), value.strip()))
+                except ValueError:
+                    continue
+            if metric_values:
+                columns = st.columns(min(4, len(metric_values)))
+                for column, (label, value, raw) in zip(columns, metric_values[:4], strict=False):
+                    column.metric(label, f"{value:,.0f}", help=raw)
+                st.bar_chart(
+                    {label: [value] for label, value, _ in metric_values},
+                    height=220,
+                )
+            with st.expander("Reported fundamentals details"):
+                st.dataframe(
+                    [{"Metric": key.strip(), "Reported value": value.strip()} for key, value in fundamental_rows],
+                    hide_index=True,
+                    use_container_width=True,
+                )
         inference = DemoInference() if mode.startswith("Demo") else OpenAIInferenceClient()
-        with st.spinner("Running stock analysis..."):
+        with st.status("Running analysis...", expanded=True) as analysis_status:
+            st.write("Running the initial evidence pass.")
             result = StockAnalyser(inference).analyse(stock, documents)
+            analysis_status.update(label="Analysis complete", state="complete")
     except Exception as error:
         st.error(f"Analysis failed: {error}")
         st.stop()
@@ -240,6 +284,23 @@ if st.button("Run analysis", use_container_width=True) or request_review:
     metric_columns[4].metric("Evidence items", evidence_count)
     st.markdown(f"### :{status_styles}[Overall: {result.overall_status.value}]")
     st.write(result.summary)
+    render_visualisation(result.summary_visualisation)
+
+    if result.research.get("used_web_research"):
+        with st.expander("How web research affected this report", expanded=True):
+            st.info(result.research.get("impact", "Additional trusted web research was used."))
+            for change in result.research.get("changes", []):
+                if isinstance(change, dict):
+                    st.markdown(
+                        f"**{change.get('screen', 'Screen')}** — "
+                        f"{change.get('effect', 'updated')}: "
+                        f"{change.get('explanation', '')}"
+                    )
+            st.caption("Trusted pages used in the final inference:")
+            for source_url in result.research.get("source_urls", []):
+                st.markdown(f"- {source_url}")
+    elif result.research.get("searches"):
+        st.warning("Web research was requested, but no trusted pages were returned.")
 
     left, right = st.columns([1, 1])
     with left:
@@ -264,24 +325,13 @@ if st.button("Run analysis", use_container_width=True) or request_review:
         icon = status_icons[screen.status.value]
         with st.expander(f"{icon} {screen.name} · {screen.status.value}", expanded=True):
             st.write(screen.finding)
-            visualisation = screen.visualisation
-            if visualisation:
-                chart_data = {
-                    label: [value]
-                    for label, value in zip(
-                        visualisation["labels"], visualisation["values"], strict=True
-                    )
-                }
-                if visualisation["type"] == "metric" and len(chart_data) == 1:
-                    label, values = next(iter(chart_data.items()))
-                    st.metric(label, f'{values[0]} {visualisation["unit"]}'.strip())
-                elif visualisation["type"] in {"bar", "donut"}:
-                    st.bar_chart(chart_data, height=180)
+            render_visualisation(screen.visualisation)
             if screen.evidence:
                 st.caption(f"{len(screen.evidence)} source-backed evidence item(s)")
                 for evidence in screen.evidence:
                     st.markdown(f"> **Quote:** {evidence.quote}")
                     st.caption(f"{evidence.rationale} · {evidence.source_url}")
+                    render_visualisation(evidence.visualisation)
             else:
                 st.warning("No supporting quote was returned for this screen.")
 
